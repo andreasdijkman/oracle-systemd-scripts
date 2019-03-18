@@ -1,0 +1,22 @@
+# /etc/systemd/system/oracle.service
+#   Invoking Oracle scripts to start/shutdown Instances defined in /etc/oratab
+#   and starts Listener
+[Unit]
+Description=Systemd Python Service for Oracle Database and Listener
+After=network-online.target remote-fs.target local-fs.target
+Requires=network-online.target remote-fs.target local-fs.target
+
+[Service]
+EnvironmentFile=/etc/sysconfig/oracle
+Type=notify
+SyslogIdentifier=oracle-service
+TimeoutStartSec=5min
+TimeoutStopSec=5min
+LimitNOFILE=16384
+LimitMEMLOCK=128G
+ExecStart=/usr/libexec/oracle-systemd-service
+KillSignal=SIGUSR2
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,30 @@
+#!/bin/bash
+
+function networkup {
+  # Initialize number of attempts
+  reachable=$1
+  while [ $reachable -ne 0 ]; do
+    # Ping supplied host
+    fping -q "$2" > /dev/null 2>&1
+    # Check return code
+    if [ $? -eq 0 ]; then
+      # Success, we can exit with the right return code
+      logger -t network-reachable "Success!! The host ${TEST_HOST} is reachable!"
+      echo 0
+      return
+    fi
+    # Network down, decrement counter and try again
+    let reachable-=1
+    logger -t network-reachable "The host ${2} is unreachable. ${reachable} tries left."
+    # Sleep for one second
+    sleep 1
+  done
+  # Network down, number of attempts exhausted, quiting
+  logger -t network-reachable "The host ${2} is unreachable! Giving up after ${REPEAT} tries."
+  echo 0
+}
+
+TEST_HOST=${TEST_HOST:-www.google.com}
+REPEAT=${REPEAT:-30}
+
+exit $(networkup ${REPEAT} ${TEST_HOST})

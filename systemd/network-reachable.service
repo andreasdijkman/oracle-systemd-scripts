@@ -1,0 +1,16 @@
+[Unit]
+Description=Wait for Network to be Reachable
+DefaultDependencies=no
+Conflicts=shutdown.target
+After=network-pre.target
+Before=network-online.target
+Wants=network.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/sysconfig/network-reachable
+ExecStart=/usr/libexec/network-reachable
+RemainAfterExit=yes
+
+[Install]
+WantedBy=network-online.target
