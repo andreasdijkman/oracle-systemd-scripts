@@ -7,6 +7,7 @@ import time
 import signal
 import subprocess
 import os
+import errno
 import pwd
 import logging
 import multiprocessing
@@ -326,7 +327,9 @@ def lsnrctl(_command):
     else:
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), 'Cannot find lsnrctl')
 
-    log.info('Starting TNSLSNR in {}'.format(tnslsnr_oracle_home))
+    listener_action_msg = {"start":"Starting","stop":"Stopping"}
+
+    log.info("{} TNSLSNR in {}".format(listener_action_msg[_command],tnslsnr_oracle_home))
     # Copy the OS ENV and set the Oracle-ENV-variabels in that ENV
     tnslsnr_env = os.environ.copy()
     tnslsnr_env['PATH'] = tnslsnr_env['PATH'] + ':{}/bin'.format(tnslsnr_oracle_home)
