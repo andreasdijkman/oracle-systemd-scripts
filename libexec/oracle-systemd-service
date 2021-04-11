@@ -26,15 +26,15 @@ import logging
 import multiprocessing
 
 # Declarations
-oracle_manager = multiprocessing.Manager()
+manager = multiprocessing.Manager()
+oracle_ns = manager.Namespace()
 
 # Create some multi-process-aware variables
-oratab = oracle_manager.dict()
-oracle_home_list = oracle_manager.list()
+oracle_ns.oratab = dict()
+oracle_ns.oracle_home_list = []
+oracle_ns.running = True
 
 oratab_location = '/etc/oratab'
-running = True
-
 
 # Drop privileges during database cycle to following user
 service_user = os.environ.get('ORACLE_DATABASE_USER', 'oracle')
@@ -69,7 +69,7 @@ def start_oracle_services():
     log.info('Starting Oracle databases....')
 
     # Spawn database-starters for all databases sequentially
-    for oratab_sid, oratab_item in oratab.items():
+    for oratab_sid, oratab_item in oracle_ns.oratab.items():
         log.info('Processing database {}...'.format(oratab_sid))
         notify('STATUS=Starting databases {}'.format(oratab_sid))
         startproc = multiprocessing.Process(target=start_db, args=(
@@ -88,7 +88,7 @@ def stop_oracle_services():
 
     stop_list = []
     # Spawn stop-database-processes for all databases at once
-    for oratab_sid, oratab_item in oratab.items():
+    for oratab_sid, oratab_item in oracle_ns.oratab.items():
         log.info('Processing database {}...'.format(oratab_sid))
         stopproc = multiprocessing.Process(target=stop_db, args=(
             oratab_sid, oratab_item), name='stop-proc-{}'.format(oratab_sid))
@@ -142,7 +142,7 @@ def cgroups_checks():
         cgroup_diff_list = []
 
         log.debug('Used ORACLE_HOME\'s')
-        log.debug('\n'.join(map(str, oracle_home_list)) )
+        log.debug('\n'.join(map(str, oracle_ns.oracle_home_list)) )
 
         if (os.path.isfile(cgroup_proc_list_file)):
             with open(cgroup_proc_list_file) as proc_fh:
@@ -156,7 +156,7 @@ def cgroups_checks():
         log.debug('Number of procs in cgroup: {}'.format(len(cgroup_proc_list)))
 
         # loop through the original ORACLE_HOME-list to check all running database-processes
-        for _oracle_home in oracle_home_list:
+        for _oracle_home in oracle_ns.oracle_home_list:
             try:
                 # get the pidlist of the running database-processes of this specific ORACLE_HOME
                 oracle_home_procs = subprocess.check_output(['pidof', '{}/bin/oracle'.format(_oracle_home)]).split()
@@ -213,8 +213,7 @@ def cgroups_checks():
 def handler_stop_signals(signum, frame):
     '''We received a SIGTERM, so set the running-boolean to False to stop some loops'''
     log.info('Received TERM-signal')
-    global running
-    running = False
+    oracle_ns.running = False
 
 def handler_stop_oracle(signum, frame):
     '''We received a SIGUSR2, so set the running-boolean to False to stop some loops
@@ -222,8 +221,7 @@ def handler_stop_oracle(signum, frame):
     '''
     log.info('Received STOP-signal')
     stop_oracle_services()
-    global running
-    running = False
+    oracle_ns.running = False
 
 def handler_reload_oratab(signum, frame):
     '''We received a SIGHUP, so reload the oratab'''
@@ -272,8 +270,6 @@ def parse_oratab():
                 # declare vars
                 _oratab = dict()
                 _oracle_home_list = []
-                global oratab
-                global oracle_home_list
                 # loop through every line
                 for line in oratab_fh.readlines():
                     # find lines that start with comment
@@ -294,8 +290,8 @@ def parse_oratab():
                 # endfor
 
                 # now assign the local dict and list to the global, MultiProcess-aware Manager-vars
-                oratab = _oratab
-                oracle_home_list = _oracle_home_list
+                oracle_ns.oratab = _oratab
+                oracle_ns.oracle_home_list = _oracle_home_list
         except Exception as e:
             log.error('Failed to read file {} {}'.format(oratab_location, str(e)))
             raise
@@ -485,7 +481,7 @@ def main():
     notify('READY=1')
 
     # Run in a loop with set interval until stopped by some SIGNALS
-    while running:
+    while oracle_ns.running:
         time.sleep(cgroup_check_interval)
 
     # If we are stopped, regain control of the only running subprocess and stop it

@@ -15,6 +15,7 @@ TimeoutStopSec=5min
 LimitNOFILE=16384
 LimitMEMLOCK=128G
 ExecStart=/usr/libexec/oracle-systemd-service
+ExecReload=kill -HUP $MAINPID
 KillSignal=SIGUSR2
 KillMode=process
 
