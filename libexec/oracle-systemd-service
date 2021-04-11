@@ -48,6 +48,14 @@ log = logging.getLogger(__name__)
 log.addHandler(journal.JournalHandler(SYSLOG_IDENTIFIER=os.path.basename(__file__)))
 log.setLevel(logging.INFO)
 
+
+# Python 2.7 compatibility
+try:
+    FileNotFoundError
+except NameError:
+    # py2.X
+    FileNotFoundError = IOError
+
 # Define functions
 
 def start_oracle_services():
