@@ -83,6 +83,7 @@ def start_oracle_services():
 
 
 def stop_oracle_services():
+    '''Method for starting all Oracle-services'''
     log.info('Stopping all databases...')
     notify('STATUS=Stopping all databases...')
 
@@ -127,8 +128,8 @@ def cgroups_checks():
                     # 1:name=systemd:/system.slice/oracle.service
                     if line.startswith('1:name'):
                         cgroup_name = line.split(':')[2].strip()
-        except Exception as exc:
-            log.error('Failed to open file %s %s', cgroup_file, str(exc))
+        except Exception as err:
+            log.error('Failed to open file %s %s', cgroup_file, str(err))
     else:
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), cgroup_file)
 
@@ -169,7 +170,7 @@ def cgroups_checks():
 
         if len(cgroup_diff_list) > 0:
             # if there are missing pids in the cgroup (differences are not 0)
-            log.debug('ORACLE_HOME-processes not found in cgroup: {}'.format(cgroup_diff_list))
+            log.debug('ORACLE_HOME-processes not found in cgroup: %s', repr(cgroup_diff_list))
             log.debug('Sync cgroups ORACLE_HOME')
             if os.path.isfile(cgroup_proc_list_file):
                 try:
@@ -177,8 +178,9 @@ def cgroups_checks():
                     for non_cgroup_proc in cgroup_diff_list:
                         with open(cgroup_proc_list_file, 'a') as cgroup_proc_fh:
                             cgroup_proc_fh.write(non_cgroup_proc)
-                except Exception as e:
-                    log.error('Failed to write to file {} {}'.format(cgroup_proc_list_file, str(e)))
+                except Exception as err:
+                    log.warning('Failed to write to file %s', cgroup_proc_list_file)
+                    log.error('Error is: %s', repr(err))
             else:
                 raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), cgroup_file)
         # clear the list and redo this for the tnslnsr-process
@@ -186,14 +188,14 @@ def cgroups_checks():
 
         try:
             tnslsnr_proc = subprocess.check_output(['pidof', 'tnslsnr']).split()
-            log.debug('TNSLSNR-processes found: {}'.format(tnslsnr_proc))
+            log.debug('TNSLSNR-processes found: %s', repr(tnslsnr_proc))
             cgroup_diff_list.extend(set(tnslsnr_proc).difference(set(cgroup_proc_list)))
         except subprocess.CalledProcessError:
             log.debug('No running process TNSLSNR found')
 
         if len(cgroup_diff_list) > 0:
             # if there are missing pids in the cgroup (differences are not 0)
-            log.debug('TNSLSNR-process not found in cgroup: {}'.format(cgroup_diff_list))
+            log.debug('TNSLSNR-process not found in cgroup: %s', repr(cgroup_diff_list))
             log.debug('Sync cgroups TNSLSNR')
             if os.path.isfile(cgroup_proc_list_file):
                 try:
@@ -201,8 +203,9 @@ def cgroups_checks():
                     for non_cgroup_proc in cgroup_diff_list:
                         with open(cgroup_proc_list_file, 'a') as cgroup_proc_fh:
                             cgroup_proc_fh.write(non_cgroup_proc)
-                except Exception as e:
-                    log.error('Failed to write to file {} {}'.format(cgroup_proc_list_file, str(e)))
+                except Exception as err:
+                    log.warning('Failed to write to file %s', cgroup_proc_list_file)
+                    log.error('Error is: %s', repr(err))
             else:
                 raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), cgroup_file)
         # sleep for a defined amount of time
@@ -247,9 +250,9 @@ def setugid(user):
         log.warning('Not running as root. Cannot drop permissions.')
     elif os.getuid == passwd.pw_uid:
         # We already run as the user
-        log.warning('Already running as user {user}, no need to switch'.format(user=passwd.pw_name))
+        log.warning('Already running as user %s, no need to switch', passwd.pw_name)
     else:
-        log.debug('Switching to user {user}'.format(user=passwd.pw_name))
+        log.debug('Switching to user %s', passwd.pw_name)
         os.initgroups(passwd.pw_name, passwd.pw_gid)
         os.setgid(passwd.pw_gid)
         os.setuid(passwd.pw_uid)
@@ -325,9 +328,9 @@ def run_sqlplus(query, _oratab_sid, _oratab_item):
     # Bepaal de ORACLE_BASE aan de hand van de nieuwe ORACLE_HOME
     try:
         sqlplus_env['ORACLE_BASE'] = subprocess.check_output('{}/bin/orabase'.format(_oracle_home), env=sqlplus_env)
-    except subprocess.CalledProcessError as e:
-        log.warning('Cannot determin ORACLE_BASE by using {}/bin/orabase: {} '.format(_oracle_home))
-        log.debug('Error: {}'.format(str(e)))
+    except subprocess.CalledProcessError as cpe:
+        log.warning('Cannot determin ORACLE_BASE by using %s/bin/orabase', _oracle_home)
+        log.debug('Error: %s', repr(cpe))
 
     try:
         # Print some debug-output
@@ -345,15 +348,15 @@ def run_sqlplus(query, _oratab_sid, _oratab_item):
         stdout_lines = stdout.decode('utf-8').split('\n')
 
         # Spit out the response of sqlplus
-        for lines in stdout_lines:
-            log.debug('SQLPLUS> {}'.format(lines))
+        for line in stdout_lines:
+            log.debug('SQLPLUS> %s', repr(line))
 
     except OSError as ose:
-        log.warning('Running sqlplus went wrong: {}'.format(str(ose)))
-    except VallueError as ve:
-        log.warning('Invalid argument given: {}'.format(str(ve)))
-    except Error as e:
-        log.error('Something else went wrong with sqlplus: {}'.format(str(e)))
+        log.warning('Running sqlplus went wrong: %s',   repr(ose))
+    except VallueError as vale:
+        log.warning('Invalid argument given: %s', repr(vale))
+    except Exception as err:
+        log.error('Something else went wrong with sqlplus: %s', repr(err))
 
 
 def lsnrctl(_command):
@@ -381,8 +384,8 @@ def lsnrctl(_command):
         tnslsnr_env['ORACLE_BASE'] = subprocess.check_output(
             '{}/bin/orabase'.format(tnslsnr_oracle_home), env=tnslsnr_env)
     except subprocess.CalledProcessError as cpe:
-        log.warning('Cannot determin ORACLE_BASE by using {}/bin/orabase: {} '.format(tnslsnr_oracle_home))
-        log.debug('Error: {}'.format(str(cpe)))
+        log.warning('Cannot determin ORACLE_BASE by using %s/bin/orabase', tnslsnr_oracle_home)
+        log.debug('Error: %s', repr(cpe))
 
     try:
         # Print some debug-output
@@ -391,22 +394,22 @@ def lsnrctl(_command):
         log.debug('ORACLE_BASE: {}'.format(tnslsnr_env['ORACLE_HOME']))
 
         # Try and start the listener
-        p = subprocess.Popen(['lsnrctl', _command], env=tnslsnr_env, stdin=subprocess.PIPE,
+        proc = subprocess.Popen(['lsnrctl', _command], env=tnslsnr_env, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         # Interact with the command
-        (stdout, stderr) = p.communicate()
+        (stdout, stderr) = proc.communicate()
         # Spit out the response of lsnrctl
         stdout_lines = stdout.decode('utf-8').split('\n')
         for lines in stdout_lines:
             log.debug('LSNRCTL> {}'.format(lines))
 
     except OSError as ose:
-        log.warning('Running lsnrctl went wrong: {}'.format(str(ose)))
-    except VallueError as ve:
-        log.warning('Invalid argument given: {}'.format(str(ve)))
-    except Exception as catchalle:
-        log.error('Something else went wrong with sqlplus: {}'.format(str(catchalle)))
+        log.warning('Running lsnrctl went wrong: %s',repr(ose))
+    except VallueError as vale:
+        log.warning('Invalid argument given: %s', repr(vale))
+    except Exception as err:
+        log.error('Something else went wrong with sqlplus: %s', repr(err))
 
 
 def start_db(_oratab_sid, _oratab_item):
@@ -418,7 +421,7 @@ def start_db(_oratab_sid, _oratab_item):
 
     if _oracle_flag in ('Y', 'S'):
         # If we need to start something, build the SQL-command
-        log.info('Starting database {}'.format(_oratab_sid))
+        log.info('Starting database %s', _oratab_sid)
         startup_sql = '''
 set head off feedback off
 set pages 0 lines 300 trimspool on trimout on
@@ -432,7 +435,7 @@ exit
             startup_mode.join(' mount')
         run_sqlplus(startup_sql.format(startup_mode), _oratab_sid, _oratab_item)
     else:
-        log.info('Skipping database {}'.format(_oratab_sid))
+        log.info('Skipping database %s', _oratab_sid)
 
 
 def stop_db(_oratab_sid, _oratab_item):
@@ -442,7 +445,7 @@ def stop_db(_oratab_sid, _oratab_item):
     _oracle_flag = _oratab_item['oracle_flag']
     if _oracle_flag in ('Y', 'S'):
         # If we need to start something, we also need to stop it
-        log.info('Stopping database {}'.format(_oratab_sid))
+        log.info('Stopping database %s', _oratab_sid)
         startup_sql = '''
 set head off feedback off
 set pages 0 lines 300 trimspool on trimout on
@@ -452,7 +455,7 @@ exit
 '''
         run_sqlplus(startup_sql, _oratab_sid, _oratab_item)
     else:
-        log.info('Skipping database {}'.format(_oratab_sid))
+        log.info('Skipping database %s', _oratab_sid)
 
 
 def lsnrctl_start():
