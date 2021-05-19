@@ -353,7 +353,7 @@ def run_sqlplus(query, _oratab_sid, _oratab_item):
 
     except OSError as ose:
         log.warning('Running sqlplus went wrong: %s',   repr(ose))
-    except VallueError as vale:
+    except ValueError as vale:
         log.warning('Invalid argument given: %s', repr(vale))
     except Exception as err:
         log.error('Something else went wrong with sqlplus: %s', repr(err))
@@ -406,7 +406,7 @@ def lsnrctl(_command):
 
     except OSError as ose:
         log.warning('Running lsnrctl went wrong: %s',repr(ose))
-    except VallueError as vale:
+    except ValueError as vale:
         log.warning('Invalid argument given: %s', repr(vale))
     except Exception as err:
         log.error('Something else went wrong with sqlplus: %s', repr(err))
