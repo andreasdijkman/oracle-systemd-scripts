@@ -14,16 +14,15 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # imports
-from systemd.daemon import notify
-from systemd import journal
 import time
 import signal
 import subprocess
 import os
 import errno
-import pwd
 import logging
 import multiprocessing
+from systemd import journal
+from systemd.daemon import notify
 
 # Declarations
 manager = multiprocessing.Manager()
@@ -34,7 +33,7 @@ oracle_ns.oratab = dict()
 oracle_ns.oracle_home_list = []
 oracle_ns.running = True
 
-oratab_location = '/etc/oratab'
+ORATAB_LOCATION = '/etc/oratab'
 
 # Drop privileges during database cycle to following user
 service_user = os.environ.get('ORACLE_DATABASE_USER', 'oracle')
@@ -59,6 +58,7 @@ except NameError:
 # Define functions
 
 def start_oracle_services():
+    '''Method for starting all Oracle-services'''
     log.info('Starting Oracle Services')
 
     log.info('Starting Listener...')
@@ -70,7 +70,7 @@ def start_oracle_services():
 
     # Spawn database-starters for all databases sequentially
     for oratab_sid, oratab_item in oracle_ns.oratab.items():
-        log.info('Processing database {}...'.format(oratab_sid))
+        log.info('Processing database %s...', oratab_sid)
         notify('STATUS=Starting databases {}'.format(oratab_sid))
         startproc = multiprocessing.Process(target=start_db, args=(
             oratab_sid, oratab_item), name='start-proc-{}'.format(oratab_sid))
@@ -89,7 +89,7 @@ def stop_oracle_services():
     stop_list = []
     # Spawn stop-database-processes for all databases at once
     for oratab_sid, oratab_item in oracle_ns.oratab.items():
-        log.info('Processing database {}...'.format(oratab_sid))
+        log.info('Processing database %s...', oratab_sid)
         stopproc = multiprocessing.Process(target=stop_db, args=(
             oratab_sid, oratab_item), name='stop-proc-{}'.format(oratab_sid))
         stop_list.append(stopproc)
@@ -110,15 +110,16 @@ def stop_oracle_services():
 
 def cgroups_checks():
     '''Check if all Oracle-processes are inside the correct CGroup
-    This is to register restarted databases with the processes to systemd so that databases are can properly be stopped instead of being terminated by systemd
+    This is to register restarted databases with the processes to systemd so that databases
+    can properly be stopped instead of being terminated by systemd
     No arguments required
     '''
     log.info('Running cgroups_checks...')
     # declare some variables
     cgroup_name = None
-    cgroup_file = '/proc/{}/cgroup'.format(os.getpid())
+    cgroup_file = '/proc/{pid}/cgroup'.format(pid=os.getpid())
     # determine in what CGroup we are running
-    if (os.path.isfile(cgroup_file)):
+    if os.path.isfile(cgroup_file):
         try:
             with open(cgroup_file) as proc_fh:
                 for line in proc_fh.readlines():
@@ -126,14 +127,14 @@ def cgroups_checks():
                     # 1:name=systemd:/system.slice/oracle.service
                     if line.startswith('1:name'):
                         cgroup_name = line.split(':')[2].strip()
-        except Exception as e:
-            log.error('Failed to open file {} {}'.format(cgroup_file, str(e)))
+        except Exception as exc:
+            log.error('Failed to open file %s %s', cgroup_file, str(exc))
     else:
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), cgroup_file)
 
-    log.debug('cgroups_checks running in cgroup {}'.format(cgroup_name))
+    log.debug('cgroups_checks running in cgroup %s', cgroup_name)
 
-    while running:
+    while oracle_ns.running:
         # Declare some variables
         cgroup_proc_list_file = '/sys/fs/cgroup/systemd{}/cgroup.procs'.format(cgroup_name)
         cgroup_proc_list = []
@@ -144,7 +145,7 @@ def cgroups_checks():
         log.debug('Used ORACLE_HOME\'s')
         log.debug('\n'.join(map(str, oracle_ns.oracle_home_list)) )
 
-        if (os.path.isfile(cgroup_proc_list_file)):
+        if os.path.isfile(cgroup_proc_list_file):
             with open(cgroup_proc_list_file) as proc_fh:
                 for line in proc_fh.readlines():
                     # remove linebreak which is the last character of the string
@@ -153,7 +154,7 @@ def cgroups_checks():
         else:
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), cgroup_file)
 
-        log.debug('Number of procs in cgroup: {}'.format(len(cgroup_proc_list)))
+        log.debug('Number of procs in cgroup: %i', len(cgroup_proc_list))
 
         # loop through the original ORACLE_HOME-list to check all running database-processes
         for _oracle_home in oracle_ns.oracle_home_list:
@@ -164,13 +165,13 @@ def cgroups_checks():
                 # Determine if there are differences between the cgroup-list and the ORACLE_HOME-pidlist
                 cgroup_diff_list.extend(set(oracle_home_procs).difference(set(cgroup_proc_list)))
             except subprocess.CalledProcessError:
-                log.debug('No running processes in ORACLE_HOME {}'.format(_oracle_home))
+                log.debug('No running processes in ORACLE_HOME %s', _oracle_home)
 
-        if (len(cgroup_diff_list) > 0):
+        if len(cgroup_diff_list) > 0:
             # if there are missing pids in the cgroup (differences are not 0)
             log.debug('ORACLE_HOME-processes not found in cgroup: {}'.format(cgroup_diff_list))
             log.debug('Sync cgroups ORACLE_HOME')
-            if (os.path.isfile(cgroup_proc_list_file)):
+            if os.path.isfile(cgroup_proc_list_file):
                 try:
                     # add all those pids to the cgroup by adding them one by one to the cgroups-proc-file
                     for non_cgroup_proc in cgroup_diff_list:
@@ -190,11 +191,11 @@ def cgroups_checks():
         except subprocess.CalledProcessError:
             log.debug('No running process TNSLSNR found')
 
-        if (len(cgroup_diff_list) > 0):
+        if len(cgroup_diff_list) > 0:
             # if there are missing pids in the cgroup (differences are not 0)
             log.debug('TNSLSNR-process not found in cgroup: {}'.format(cgroup_diff_list))
             log.debug('Sync cgroups TNSLSNR')
-            if (os.path.isfile(cgroup_proc_list_file)):
+            if os.path.isfile(cgroup_proc_list_file):
                 try:
                     # add all those pids to the cgroup by adding them one by one to the cgroups-proc-file
                     for non_cgroup_proc in cgroup_diff_list:
@@ -241,14 +242,14 @@ def setugid(user):
         from pwd import getpwnam
         passwd = getpwnam(user)
 
-    if (os.getuid() != 0):
+    if os.getuid() != 0:
         # We're not root so, like, whatever dude
-        log.warn('Not running as root. Cannot drop permissions.')
-    elif(os.getuid == passwd.pw_uid):
+        log.warning('Not running as root. Cannot drop permissions.')
+    elif os.getuid == passwd.pw_uid:
         # We already run as the user
-        log.warn('Already running as user {}, no need to switch'.format(passwd.pw_name))
+        log.warning('Already running as user {user}, no need to switch'.format(user=passwd.pw_name))
     else:
-        log.debug('Switching to user {}'.format(passwd.pw_name))
+        log.debug('Switching to user {user}'.format(user=passwd.pw_name))
         os.initgroups(passwd.pw_name, passwd.pw_gid)
         os.setgid(passwd.pw_gid)
         os.setuid(passwd.pw_uid)
@@ -262,11 +263,11 @@ def parse_oratab():
     No arguments
     '''
     # Check if oratab exists
-    log.info('Parsing oratab: {}'.format(oratab_location))
+    log.info('Parsing oratab: {}'.format(ORATAB_LOCATION))
 
-    if (os.path.isfile(oratab_location)):
+    if os.path.isfile(ORATAB_LOCATION):
         try:
-            with open(oratab_location) as oratab_fh:
+            with open(ORATAB_LOCATION) as oratab_fh:
                 # declare vars
                 _oratab = dict()
                 _oracle_home_list = []
@@ -277,7 +278,7 @@ def parse_oratab():
                     count = line.count(':')
                     oratab_line_keys = ['oracle_home', 'oracle_flag']
                     # if we find a usable line (not commented), parse it
-                    if (count >= 2):
+                    if count >= 2:
                         oracle_sid = line.split(':')[0]
                         oracle_home = line.split(':')[1]
                         oracle_flag = line.split(':')[2]
@@ -292,12 +293,16 @@ def parse_oratab():
                 # now assign the local dict and list to the global, MultiProcess-aware Manager-vars
                 oracle_ns.oratab = _oratab
                 oracle_ns.oracle_home_list = _oracle_home_list
-        except Exception as e:
-            log.error('Failed to read file {} {}'.format(oratab_location, str(e)))
+        except OSError as ose:
+            log.error('Failed to read file %s', ORATAB_LOCATION)
+            log.error('Error is %s', repr(ose))
             raise
+        except Exception as err:
+            log.error('Unexecpeted error in reading file %s', ORATAB_LOCATION)
+            log.error('Error is %s', repr(err))
 
     else:
-        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), oratab_location)
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), ORATAB_LOCATION)
 
 
 def run_sqlplus(query, _oratab_sid, _oratab_item):
@@ -321,13 +326,13 @@ def run_sqlplus(query, _oratab_sid, _oratab_item):
     try:
         sqlplus_env['ORACLE_BASE'] = subprocess.check_output('{}/bin/orabase'.format(_oracle_home), env=sqlplus_env)
     except subprocess.CalledProcessError as e:
-        log.warn('Cannot determin ORACLE_BASE by using {}/bin/orabase: {} '.format(_oracle_home))
+        log.warning('Cannot determin ORACLE_BASE by using {}/bin/orabase: {} '.format(_oracle_home))
         log.debug('Error: {}'.format(str(e)))
 
     try:
         # Print some debug-output
         log.debug('ORACLE_SID: {}'.format(sqlplus_env['ORACLE_SID']))
-        if (sqlplus_env.get('ORACLE_BASE') is not None):
+        if sqlplus_env.get('ORACLE_BASE') is not None:
             log.debug('ORACLE_BASE: {}'.format(sqlplus_env['ORACLE_BASE']))
         log.debug('ORACLE_HOME: {}'.format(sqlplus_env['ORACLE_HOME']))
 
@@ -344,9 +349,9 @@ def run_sqlplus(query, _oratab_sid, _oratab_item):
             log.debug('SQLPLUS> {}'.format(lines))
 
     except OSError as ose:
-        log.warn('Running sqlplus went wrong: {}'.format(str(ose)))
+        log.warning('Running sqlplus went wrong: {}'.format(str(ose)))
     except VallueError as ve:
-        log.warn('Invalid argument given: {}'.format(str(ve)))
+        log.warning('Invalid argument given: {}'.format(str(ve)))
     except Error as e:
         log.error('Something else went wrong with sqlplus: {}'.format(str(e)))
 
@@ -359,7 +364,7 @@ def lsnrctl(_command):
     '''
     # determine ORACLE_HOME of listener with fallback
     tnslsnr_oracle_home = os.environ.get('LISTENER_ORACLE_HOME', os.environ.get('ORACLE_HOME'))
-    if (tnslsnr_oracle_home is not None):
+    if tnslsnr_oracle_home is not None:
         pass
     else:
         raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), 'Cannot find lsnrctl')
@@ -375,13 +380,13 @@ def lsnrctl(_command):
         # Try to get the env-variable ORACLE_BASE
         tnslsnr_env['ORACLE_BASE'] = subprocess.check_output(
             '{}/bin/orabase'.format(tnslsnr_oracle_home), env=tnslsnr_env)
-    except subprocess.CalledProcessError as e:
-        log.warn('Cannot determin ORACLE_BASE by using {}/bin/orabase: {} '.format(tnslsnr_oracle_home))
-        log.debug('Error: {}'.format(str(e)))
+    except subprocess.CalledProcessError as cpe:
+        log.warning('Cannot determin ORACLE_BASE by using {}/bin/orabase: {} '.format(tnslsnr_oracle_home))
+        log.debug('Error: {}'.format(str(cpe)))
 
     try:
         # Print some debug-output
-        if (tnslsnr_env.get('ORACLE_BASE') is not None):
+        if tnslsnr_env.get('ORACLE_BASE') is not None:
             log.debug('ORACLE_BASE: {}'.format(tnslsnr_env['ORACLE_BASE']))
         log.debug('ORACLE_BASE: {}'.format(tnslsnr_env['ORACLE_HOME']))
 
@@ -397,11 +402,11 @@ def lsnrctl(_command):
             log.debug('LSNRCTL> {}'.format(lines))
 
     except OSError as ose:
-        log.warn('Running lsnrctl went wrong: {}'.format(str(ose)))
+        log.warning('Running lsnrctl went wrong: {}'.format(str(ose)))
     except VallueError as ve:
-        log.warn('Invalid argument given: {}'.format(str(ve)))
-    except Error as e:
-        log.error('Something else went wrong with sqlplus: {}'.format(str(e)))
+        log.warning('Invalid argument given: {}'.format(str(ve)))
+    except Exception as catchalle:
+        log.error('Something else went wrong with sqlplus: {}'.format(str(catchalle)))
 
 
 def start_db(_oratab_sid, _oratab_item):
@@ -463,6 +468,7 @@ def lsnrctl_stop():
 
 
 def main():
+    '''Main function to be called'''
     # catch some signals to handle systemd-stop-commands or just stop the daemon if accidentally killed
     signal.signal(signal.SIGTERM, handler_stop_signals)
     signal.signal(signal.SIGUSR2, handler_stop_oracle)
