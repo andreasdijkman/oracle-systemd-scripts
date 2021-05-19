@@ -245,10 +245,12 @@ def setugid(user):
         from pwd import getpwnam
         passwd = getpwnam(user)
 
-    if os.getuid() != 0:
+    _uid = os.getuid()
+
+    if _uid != 0:
         # We're not root so, like, whatever dude
         log.warning('Not running as root. Cannot drop permissions.')
-    elif os.getuid == passwd.pw_uid:
+    elif passwd.pw_uid ==  _uid:
         # We already run as the user
         log.warning('Already running as user %s, no need to switch', passwd.pw_name)
     else:
@@ -266,7 +268,7 @@ def parse_oratab():
     No arguments
     '''
     # Check if oratab exists
-    log.info('Parsing oratab: {}'.format(ORATAB_LOCATION))
+    log.info('Parsing oratab: %s', ORATAB_LOCATION)
 
     if os.path.isfile(ORATAB_LOCATION):
         try:
@@ -334,22 +336,25 @@ def run_sqlplus(query, _oratab_sid, _oratab_item):
 
     try:
         # Print some debug-output
-        log.debug('ORACLE_SID: {}'.format(sqlplus_env['ORACLE_SID']))
+        log.debug('ORACLE_SID: %s', sqlplus_env['ORACLE_SID'])
         if sqlplus_env.get('ORACLE_BASE') is not None:
-            log.debug('ORACLE_BASE: {}'.format(sqlplus_env['ORACLE_BASE']))
-        log.debug('ORACLE_HOME: {}'.format(sqlplus_env['ORACLE_HOME']))
+            log.debug('ORACLE_BASE: %s', sqlplus_env['ORACLE_BASE'])
+        log.debug('ORACLE_HOME: %s', sqlplus_env['ORACLE_HOME'])
 
         # Run sqlplus
-        sqlplus = subprocess.Popen(['sqlplus', '-S', '/nolog'], env=sqlplus_env,
-                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        with subprocess.Popen(['sqlplus', '-S', '/nolog'],
+                                env=sqlplus_env,
+                                stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE) as sqlplus:
 
-        # interact with the running sqlplus and push the query
-        (stdout, stderr) = sqlplus.communicate(query.encode('utf-8'))
-        stdout_lines = stdout.decode('utf-8').split('\n')
+            # interact with the running sqlplus and push the query
+            (stdout, dummy_stderr) = sqlplus.communicate(query.encode('utf-8'))
+            stdout_lines = stdout.decode('utf-8').split('\n')
 
-        # Spit out the response of sqlplus
-        for line in stdout_lines:
-            log.debug('SQLPLUS> %s', repr(line))
+            # Spit out the response of sqlplus
+            for line in stdout_lines:
+                log.debug('SQLPLUS> %s', repr(line))
 
     except OSError as ose:
         log.warning('Running sqlplus went wrong: %s',   repr(ose))
@@ -374,7 +379,7 @@ def lsnrctl(_command):
 
     listener_action_msg = {"start":"Starting","stop":"Stopping"}
 
-    log.info("{} TNSLSNR in {}".format(listener_action_msg[_command],tnslsnr_oracle_home))
+    log.info('%s TNSLSNR in %s', listener_action_msg[_command],tnslsnr_oracle_home)
     # Copy the OS ENV and set the Oracle-ENV-variabels in that ENV
     tnslsnr_env = os.environ.copy()
     tnslsnr_env['PATH'] = tnslsnr_env['PATH'] + ':{}/bin'.format(tnslsnr_oracle_home)
@@ -390,19 +395,22 @@ def lsnrctl(_command):
     try:
         # Print some debug-output
         if tnslsnr_env.get('ORACLE_BASE') is not None:
-            log.debug('ORACLE_BASE: {}'.format(tnslsnr_env['ORACLE_BASE']))
-        log.debug('ORACLE_BASE: {}'.format(tnslsnr_env['ORACLE_HOME']))
+            log.debug('ORACLE_BASE: %s', tnslsnr_env['ORACLE_BASE'])
+        log.debug('ORACLE_BASE: %s', tnslsnr_env['ORACLE_HOME'])
 
         # Try and start the listener
-        proc = subprocess.Popen(['lsnrctl', _command], env=tnslsnr_env, stdin=subprocess.PIPE,
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        with subprocess.Popen(['lsnrctl', _command],
+                                env=tnslsnr_env,
+                                stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE) as proc:
 
-        # Interact with the command
-        (stdout, stderr) = proc.communicate()
-        # Spit out the response of lsnrctl
-        stdout_lines = stdout.decode('utf-8').split('\n')
-        for lines in stdout_lines:
-            log.debug('LSNRCTL> {}'.format(lines))
+            # Interact with the command
+            (stdout, dummy_stderr) = proc.communicate()
+            # Spit out the response of lsnrctl
+            stdout_lines = stdout.decode('utf-8').split('\n')
+            for line in stdout_lines:
+                log.debug('LSNRCTL> %s',repr(line))
 
     except OSError as ose:
         log.warning('Running lsnrctl went wrong: %s',repr(ose))
