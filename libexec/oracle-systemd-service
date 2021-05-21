@@ -376,30 +376,30 @@ def run_sqlplus(query, oratab_sid, oratab_item):
 
 def lsnrctl(command):
     '''run the command lsnrctl with given argument
-    Needs ENV-variable LISTENERoracle_home with fallback ORACLE_HOME to start the Listener
+    Needs ENV-variable LISTENER_ORACLE_HOME with fallback ORACLE_HOME to start the Listener
 
     Arguments is argument given to command lsnrtcl as single string
     '''
     # determine ORACLE_HOME of listener with fallback
-    tnslsnroracle_home = os.environ.get('LISTENERoracle_home', os.environ.get('ORACLE_HOME'))
-    if tnslsnroracle_home is not None:
+    tnslsnr_oracle_home = os.environ.get('LISTENER_ORACLE_HOME', os.environ.get('ORACLE_HOME'))
+    if tnslsnr_oracle_home is not None:
         pass
     else:
-        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), 'Cannot find lsnrctl')
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), 'Cannot find lsnrctl in %s', tnslsnr_oracle_home)
 
     listener_action_msg = {"start": "Starting", "stop": "Stopping"}
 
-    log.info('%s TNSLSNR in %s', listener_action_msg[command], tnslsnroracle_home)
+    log.info('%s TNSLSNR in %s', listener_action_msg[command], tnslsnr_oracle_home)
     # Copy the OS ENV and set the Oracle-ENV-variabels in that ENV
     tnslsnr_env = os.environ.copy()
-    tnslsnr_env['PATH'] = tnslsnr_env['PATH'] + ':{}/bin'.format(tnslsnroracle_home)
-    tnslsnr_env['ORACLE_HOME'] = tnslsnroracle_home
+    tnslsnr_env['PATH'] = tnslsnr_env['PATH'] + ':{}/bin'.format(tnslsnr_oracle_home)
+    tnslsnr_env['ORACLE_HOME'] = tnslsnr_oracle_home
     try:
         # Try to get the env-variable ORACLE_BASE
         tnslsnr_env['ORACLE_BASE'] = subprocess.check_output(
-            '{}/bin/orabase'.format(tnslsnroracle_home), env=tnslsnr_env)
+            '{}/bin/orabase'.format(tnslsnr_oracle_home), env=tnslsnr_env)
     except subprocess.CalledProcessError as cpe:
-        log.warning('Cannot determin ORACLE_BASE by using %s/bin/orabase', tnslsnroracle_home)
+        log.warning('Cannot determin ORACLE_BASE by using %s/bin/orabase', tnslsnr_oracle_home)
         log.debug('Error: %s', repr(cpe))
 
     try:
