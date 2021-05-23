@@ -168,7 +168,7 @@ def cgroups_checks():
                     # add all those pids to the cgroup by adding them one by one to the cgroups-proc-file
                     for non_cgroup_proc in cgroup_diff_list:
                         with open(cgroup_proc_list_file, 'a') as cgroup_proc_fh:
-                            cgroup_proc_fh.write(non_cgroup_proc)
+                            cgroup_proc_fh.write(non_cgroup_proc.decode('utf-8'))
                 except Exception as e:
                     log.error('Failed to write to file {} {}'.format(cgroup_proc_list_file, str(e)))
             else:
@@ -192,7 +192,7 @@ def cgroups_checks():
                     # add all those pids to the cgroup by adding them one by one to the cgroups-proc-file
                     for non_cgroup_proc in cgroup_diff_list:
                         with open(cgroup_proc_list_file, 'a') as cgroup_proc_fh:
-                            cgroup_proc_fh.write(non_cgroup_proc)
+                            cgroup_proc_fh.write(non_cgroup_proc.decode('utf-8'))
                 except Exception as e:
                     log.error('Failed to write to file {} {}'.format(cgroup_proc_list_file, str(e)))
             else:
