@@ -21,6 +21,8 @@ import os
 import errno
 import logging
 import multiprocessing
+from pwd import getpwuid
+from pwd import getpwnam
 from systemd import journal
 from systemd.daemon import notify
 
@@ -35,12 +37,12 @@ oracle_ns.running = True
 oracle_ns.tnslsnr_oracle_home = None
 
 ORATAB_LOCATION = '/etc/oratab'
+#LSNRTAB_LOCATION = '/etc/lsnrtab'
 
 # Setup logging
-#logging = multiprocessing.log.to_stderr()
 log = logging.getLogger(__name__)
 log.addHandler(journal.JournalHandler(SYSLOG_IDENTIFIER=os.path.basename(__file__)))
-#log.setLevel(logging.INFO)
+# log.setLevel(logging.INFO)
 log.setLevel(logging.DEBUG)
 
 # Drop privileges during database cycle to following user
@@ -67,7 +69,10 @@ def start_oracle_services():
     log.info('Starting Oracle Services')
 
     log.info('Starting Listener...')
-    startlsnrproc = multiprocessing.Process(target=lsnrctl_start, name='start-listener')
+    listener_name = 'LISTENER'
+    startlsnrproc = multiprocessing.Process(target=lsnrctl_start,
+                                            args=(oracle_ns.tnslsnr_oracle_home, listener_name),
+                                            name='start-listener')
     startlsnrproc.start()
     startlsnrproc.join()
 
@@ -77,8 +82,9 @@ def start_oracle_services():
     for oratab_sid, oratab_item in oracle_ns.oratab.items():
         log.info('Processing database %s...', oratab_sid)
         notify('STATUS=Starting databases {}'.format(oratab_sid))
-        startproc = multiprocessing.Process(target=start_db, args=(
-            oratab_sid, oratab_item), name='start-proc-{}'.format(oratab_sid))
+        startproc = multiprocessing.Process(target=start_db,
+                                            args=(oratab_sid, oratab_item),
+                                            name='start-proc-{}'.format(oratab_sid))
         startproc.start()
         # wait for them to complete
         startproc.join()
@@ -96,8 +102,9 @@ def stop_oracle_services():
     # Spawn stop-database-processes for all databases at once
     for oratab_sid, oratab_item in oracle_ns.oratab.items():
         log.info('Processing database %s...', oratab_sid)
-        stopproc = multiprocessing.Process(target=stop_db, args=(
-            oratab_sid, oratab_item), name='stop-proc-{}'.format(oratab_sid))
+        stopproc = multiprocessing.Process(target=stop_db,
+                                           args=(oratab_sid, oratab_item),
+                                           name='stop-proc-{}'.format(oratab_sid))
         stop_list.append(stopproc)
         stopproc.start()
 
@@ -109,7 +116,10 @@ def stop_oracle_services():
     notify('STATUS=Stopped all databases')
 
     log.info('Stopping Listener')
-    stoplsnrproc = multiprocessing.Process(target=lsnrctl_stop, name='stop-listener')
+    listener_name = 'LISTENER'
+    stoplsnrproc = multiprocessing.Process(target=lsnrctl_stop,
+                                           args=(oracle_ns.tnslsnr_oracle_home, listener_name),
+                                           name='stop-listener')
     stoplsnrproc.start()
     stoplsnrproc.join()
 
@@ -145,7 +155,8 @@ def cgroups_checks():
         for oracle_home in oracle_ns.oracle_home_list:
             try:
                 # get the pidlist of the running database-processes of this specific ORACLE_HOME
-                oracle_home_procs = subprocess.check_output(['pidof', '{}/bin/oracle'.format(oracle_home)]).split()
+                oracle_home_procs = subprocess.check_output(
+                    ['pidof', '{}/bin/oracle'.format(oracle_home)]).decode('utf-8').split()
 
                 # Determine if there are differences between the cgroup-list and the ORACLE_HOME-pidlist
                 cgroup_diff_list.extend(set(oracle_home_procs).difference(set(cgroup_proc_list)))
@@ -162,7 +173,7 @@ def cgroups_checks():
         cgroup_diff_list = []
 
         try:
-            tnslsnr_proc = subprocess.check_output(['pidof', 'tnslsnr']).split()
+            tnslsnr_proc = subprocess.check_output(['pidof', 'tnslsnr']).decode('utf-8').split()
             log.debug('TNSLSNR-processes found: %s', repr(tnslsnr_proc))
             cgroup_diff_list.extend(set(tnslsnr_proc).difference(set(cgroup_proc_list)))
         except subprocess.CalledProcessError:
@@ -200,6 +211,7 @@ def handler_reloadoratab(_signum, _frame):
     log.info('Received SIGHUP-signal')
     parseoratab()
 
+
 def sync_pid_cgroups(cgroup_proc_list_file, cgroup_diff_list):
     '''Let's sync the pids to the cgroup'''
     try:
@@ -213,6 +225,7 @@ def sync_pid_cgroups(cgroup_proc_list_file, cgroup_diff_list):
     except FileNotFoundError:
         log.error('File not found %s', ORATAB_LOCATION)
         raise
+
 
 def get_cgroup_name(cgroup_file):
     '''Get the name of the cgroup from the cgroup file
@@ -235,6 +248,7 @@ def get_cgroup_name(cgroup_file):
         log.error('File not found %s', ORATAB_LOCATION)
         raise
 
+
 def get_cgroup_procs(cgroup_proc_list_file):
     '''Get the processes in the cgroup
     Argument is the cgroup process file of the cgroup
@@ -254,16 +268,15 @@ def get_cgroup_procs(cgroup_proc_list_file):
         log.error('File not found %s', ORATAB_LOCATION)
         raise
 
+
 def setugid(user):
     '''Change process user and group ID
 
     Argument is a numeric user id or a user name
     '''
     try:
-        from pwd import getpwuid
         passwd = getpwuid(int(user))
     except ValueError:
-        from pwd import getpwnam
         passwd = getpwnam(user)
 
     uid = os.getuid()
@@ -280,6 +293,7 @@ def setugid(user):
         os.setgid(passwd.pw_gid)
         os.setuid(passwd.pw_uid)
         os.environ['HOME'] = passwd.pw_dir
+
 
 def parseoratab():
     '''Function to parse the contents of the oratab
@@ -325,7 +339,6 @@ def parseoratab():
         raise
 
 
-
 def run_sqlplus(query, oratab_sid, oratab_item):
     '''Function to run sqlplus
     Arguments are:
@@ -342,9 +355,10 @@ def run_sqlplus(query, oratab_sid, oratab_item):
     sqlplus_env['ORACLE_SID'] = oratab_sid
     sqlplus_env['ORACLE_HOME'] = oracle_home
 
-    # Bepaal de ORACLE_BASE aan de hand van de nieuwe ORACLE_HOME
+    # Get ORACLE_BASE from the new ORACLE_HOME
     try:
-        sqlplus_env['ORACLE_BASE'] = subprocess.check_output('{}/bin/orabase'.format(oracle_home), env=sqlplus_env)
+        sqlplus_env['ORACLE_BASE'] = subprocess.check_output(
+            '{}/bin/orabase'.format(oracle_home), env=sqlplus_env).decode('utf-8')
     except subprocess.CalledProcessError as cpe:
         log.warning('Cannot determin ORACLE_BASE by using %s/bin/orabase', oracle_home)
         log.debug('Error: %s', repr(cpe))
@@ -357,7 +371,7 @@ def run_sqlplus(query, oratab_sid, oratab_item):
         log.debug('ORACLE_HOME: %s', sqlplus_env['ORACLE_HOME'])
 
         # Run sqlplus
-        with subprocess.Popen(['sqlplus', '-S', '/nolog]'],
+        with subprocess.Popen(['sqlplus', '-S', '/nolog'],
                               env=sqlplus_env,
                               stdin=subprocess.PIPE,
                               stdout=subprocess.PIPE,
@@ -377,11 +391,9 @@ def run_sqlplus(query, oratab_sid, oratab_item):
         log.warning('Invalid argument given: %s', repr(vale))
 
 
-def lsnrctl(command, tnslsnr_oracle_home):
+def lsnrctl(command, tnslsnr_oracle_home, tnslsnr_name):
     '''run the command lsnrctl with given argument
-    Needs ENV-variable LISTENER_ORACLE_HOME start the Listener
-
-    Arguments is argument given to command lsnrtcl as single string
+    Needs ENV-variable LISTENER_ORACLE_HOME to start the Listener
     '''
     listener_action_msg = {"start": "Starting", "stop": "Stopping"}
 
@@ -389,11 +401,11 @@ def lsnrctl(command, tnslsnr_oracle_home):
     # Copy the OS ENV and set the Oracle-ENV-variabels in that ENV
     tnslsnr_env = os.environ.copy()
     tnslsnr_env['PATH'] = tnslsnr_env['PATH'] + ':{}/bin'.format(tnslsnr_oracle_home)
-    tnslsnr_env['ORACLE_HOME'] = oracle_ns.tnslsnr_oracle_home
+    tnslsnr_env['ORACLE_HOME'] = tnslsnr_oracle_home
     try:
         # Try to get the env-variable ORACLE_BASE
         tnslsnr_env['ORACLE_BASE'] = subprocess.check_output(
-            '{}/bin/orabase'.format(tnslsnr_oracle_home), env=tnslsnr_env)
+            '{}/bin/orabase'.format(tnslsnr_oracle_home), env=tnslsnr_env).decode('utf-8')
     except subprocess.CalledProcessError as cpe:
         log.warning('Cannot determin ORACLE_BASE by using %s/bin/orabase', tnslsnr_oracle_home)
         log.debug('Error: %s', repr(cpe))
@@ -405,7 +417,7 @@ def lsnrctl(command, tnslsnr_oracle_home):
         log.debug('ORACLE_BASE: %s', tnslsnr_env['ORACLE_HOME'])
 
         # Try and start the listener
-        with subprocess.Popen(['lsnrctl', command],
+        with subprocess.Popen(['lsnrctl', command, tnslsnr_name],
                               env=tnslsnr_env,
                               stdin=subprocess.PIPE,
                               stdout=subprocess.PIPE,
@@ -473,25 +485,21 @@ exit
         log.info('Skipping database %s', oratab_sid)
 
 
-def lsnrctl_start():
+def lsnrctl_start(tns_orahome, tns_name):
     '''Stop the Listener by running lsnrctl with the supplied argument as the correct user'''
-    # set a local variable before switching user, to prevent permission-errors between processes
-    tns_orahome = oracle_ns.tnslsnr_oracle_home
 
     # Try to set the correct user
     setugid(service_user)
 
-    lsnrctl('start', tns_orahome)
+    lsnrctl('start', tns_orahome, tns_name)
 
 
-def lsnrctl_stop():
+def lsnrctl_stop(tns_orahome, tns_name):
     '''Start the Listener by running lsnrctl with the supplied argument as the correct user'''
-    # set a local variable before switching user, to prevent permission-errors between processes
-    tns_orahome = oracle_ns.tnslsnr_oracle_home
     # Try to set the correct user
     setugid(service_user)
 
-    lsnrctl('stop', tns_orahome)
+    lsnrctl('stop', tns_orahome, tns_name)
 
 
 def main():
