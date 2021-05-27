@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -32,8 +32,16 @@ oracle_ns = manager.Namespace()
 oracle_ns.oratab = dict()
 oracle_ns.oracle_home_list = []
 oracle_ns.running = True
+oracle_ns.tnslsnr_oracle_home = None
 
 ORATAB_LOCATION = '/etc/oratab'
+
+# Setup logging
+#logging = multiprocessing.log.to_stderr()
+log = logging.getLogger(__name__)
+log.addHandler(journal.JournalHandler(SYSLOG_IDENTIFIER=os.path.basename(__file__)))
+#log.setLevel(logging.INFO)
+log.setLevel(logging.DEBUG)
 
 # Drop privileges during database cycle to following user
 service_user = os.environ.get('ORACLE_DATABASE_USER', 'oracle')
@@ -41,12 +49,8 @@ service_user = os.environ.get('ORACLE_DATABASE_USER', 'oracle')
 # Interval for the cgroup-check-process
 cgroup_check_interval = int(os.environ.get('CGROUP_CHECK_INTERVAL', 120))
 
-# Setup logging
-#log = multiprocessing.log_to_stderr()
-log = logging.getLogger(__name__)
-log.addHandler(journal.JournalHandler(SYSLOG_IDENTIFIER=os.path.basename(__file__)))
-log.setLevel(logging.INFO)
-
+# determine ORACLE_HOME of listener
+oracle_ns.tnslsnr_oracle_home = os.environ['LISTENER_ORACLE_HOME']
 
 # Python 2.7 compatibility
 try:
@@ -202,7 +206,7 @@ def sync_pid_cgroups(cgroup_proc_list_file, cgroup_diff_list):
         # add all those pids to the cgroup by adding them one by one to the cgroups-proc-file
         with open(cgroup_proc_list_file, 'a') as cgroup_proc_fh:
             for non_cgroup_proc in cgroup_diff_list:
-                cgroup_proc_fh.write(non_cgroup_proc)
+                cgroup_proc_fh.write(non_cgroup_proc.decode('utf-8'))
     except PermissionError:
         log.error('Permission denied reading file %s', ORATAB_LOCATION)
         raise
@@ -236,7 +240,7 @@ def get_cgroup_procs(cgroup_proc_list_file):
     Argument is the cgroup process file of the cgroup
     Returns a list of processes in the cgroup'''
     try:
-        cgroup_proc_list = None
+        cgroup_proc_list = []
         with open(cgroup_proc_list_file) as proc_fh:
             for line in proc_fh.readlines():
                 # remove linebreak which is the last character of the string
@@ -276,7 +280,6 @@ def setugid(user):
         os.setgid(passwd.pw_gid)
         os.setuid(passwd.pw_uid)
         os.environ['HOME'] = passwd.pw_dir
-
 
 def parseoratab():
     '''Function to parse the contents of the oratab
@@ -354,7 +357,7 @@ def run_sqlplus(query, oratab_sid, oratab_item):
         log.debug('ORACLE_HOME: %s', sqlplus_env['ORACLE_HOME'])
 
         # Run sqlplus
-        with subprocess.Popen(['sqlplus', '-S', '/nolog'],
+        with subprocess.Popen(['sqlplus', '-S', '/nolog]'],
                               env=sqlplus_env,
                               stdin=subprocess.PIPE,
                               stdout=subprocess.PIPE,
@@ -374,26 +377,19 @@ def run_sqlplus(query, oratab_sid, oratab_item):
         log.warning('Invalid argument given: %s', repr(vale))
 
 
-def lsnrctl(command):
+def lsnrctl(command, tnslsnr_oracle_home):
     '''run the command lsnrctl with given argument
-    Needs ENV-variable LISTENER_ORACLE_HOME with fallback ORACLE_HOME to start the Listener
+    Needs ENV-variable LISTENER_ORACLE_HOME start the Listener
 
     Arguments is argument given to command lsnrtcl as single string
     '''
-    # determine ORACLE_HOME of listener with fallback
-    tnslsnr_oracle_home = os.environ.get('LISTENER_ORACLE_HOME', os.environ.get('ORACLE_HOME'))
-    if tnslsnr_oracle_home is not None:
-        pass
-    else:
-        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), 'Cannot find lsnrctl in %s', tnslsnr_oracle_home)
-
     listener_action_msg = {"start": "Starting", "stop": "Stopping"}
 
     log.info('%s TNSLSNR in %s', listener_action_msg[command], tnslsnr_oracle_home)
     # Copy the OS ENV and set the Oracle-ENV-variabels in that ENV
     tnslsnr_env = os.environ.copy()
     tnslsnr_env['PATH'] = tnslsnr_env['PATH'] + ':{}/bin'.format(tnslsnr_oracle_home)
-    tnslsnr_env['ORACLE_HOME'] = tnslsnr_oracle_home
+    tnslsnr_env['ORACLE_HOME'] = oracle_ns.tnslsnr_oracle_home
     try:
         # Try to get the env-variable ORACLE_BASE
         tnslsnr_env['ORACLE_BASE'] = subprocess.check_output(
@@ -432,6 +428,7 @@ def start_db(oratab_sid, oratab_item):
     '''Start the correct database in the correct mode by running a SQL-command'''
     # Try to set the correct user
     setugid(service_user)
+
     # get the start-mode of the database, normal or standby (mount)
     oracle_flag = oratab_item['oracle_flag']
 
@@ -456,7 +453,9 @@ exit
 
 def stop_db(oratab_sid, oratab_item):
     '''Stop the correct database by running a SQL-command'''
+    # Try to set the correct user
     setugid(service_user)
+
     # get the start-mode of the database, normal or standby (mount)
     oracle_flag = oratab_item['oracle_flag']
     if oracle_flag in ('Y', 'S'):
@@ -476,14 +475,23 @@ exit
 
 def lsnrctl_start():
     '''Stop the Listener by running lsnrctl with the supplied argument as the correct user'''
+    # set a local variable before switching user, to prevent permission-errors between processes
+    tns_orahome = oracle_ns.tnslsnr_oracle_home
+
+    # Try to set the correct user
     setugid(service_user)
-    lsnrctl('start')
+
+    lsnrctl('start', tns_orahome)
 
 
 def lsnrctl_stop():
     '''Start the Listener by running lsnrctl with the supplied argument as the correct user'''
+    # set a local variable before switching user, to prevent permission-errors between processes
+    tns_orahome = oracle_ns.tnslsnr_oracle_home
+    # Try to set the correct user
     setugid(service_user)
-    lsnrctl('stop')
+
+    lsnrctl('stop', tns_orahome)
 
 
 def main():
@@ -492,6 +500,12 @@ def main():
     signal.signal(signal.SIGTERM, handler_stop_signals)
     signal.signal(signal.SIGUSR2, handler_stop_oracle)
     signal.signal(signal.SIGHUP, handler_reloadoratab)
+
+    if oracle_ns.tnslsnr_oracle_home is not None:
+        pass
+    else:
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT),
+                                'Cannot find lsnrctl in %s', oracle_ns.tnslsnr_oracle_home)
 
     # First, parse /etc/oratab
     parseoratab()
