@@ -18,9 +18,9 @@ import time
 import signal
 import subprocess
 import os
-import errno
 import logging
 import multiprocessing
+from errno import ENOENT
 from pwd import getpwuid
 from pwd import getpwnam
 from systemd import journal
@@ -505,7 +505,7 @@ def main():
     if oracle_ns.tnslsnr_oracle_home is not None:
         pass
     else:
-        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT),
+        raise FileNotFoundError(ENOENT, os.strerror(ENOENT),
                                 'Cannot find lsnrctl in %s', oracle_ns.tnslsnr_oracle_home)
 
     # First, parse /etc/oratab
