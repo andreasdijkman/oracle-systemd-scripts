@@ -18,9 +18,9 @@ import time
 import signal
 import subprocess
 import os
-import errno
 import logging
 import multiprocessing
+from errno import EACCES, EPERM, ENOENT
 from pwd import getpwuid
 from pwd import getpwnam
 from systemd import journal
@@ -55,6 +55,19 @@ oracle_ns.tnslsnr_oracle_home = os.environ['LISTENER_ORACLE_HOME']
 
 
 # Define functions
+
+def print_error_message(err, file_name):
+    '''Method to print out more detailed error-messages'''
+    # PermissionError
+    if err.errno == EPERM or err.errno == EACCES:
+        log.error("PermissionError error(%s): %s as:\n%s", err.errno, err.strerror, file_name)
+    # FileNotFoundError
+    elif err.errno == ENOENT:
+        log.error("FileNotFoundError error(%s): %s as:\n%s", err.errno, err.strerror, file_name)
+    elif IOError:
+        log.error("I/O error(%s): %s as:\n%s", err.errno, err.strerror, file_name)
+    elif OSError:
+        log.error("OS error(%s): %s as:\n%s", err.errno, err.strerror, file_name)
 
 
 def start_oracle_services():
@@ -212,11 +225,11 @@ def sync_pid_cgroups(cgroup_proc_list_file, cgroup_diff_list):
         with open(cgroup_proc_list_file, 'a') as cgroup_proc_fh:
             for non_cgroup_proc in cgroup_diff_list:
                 cgroup_proc_fh.write(non_cgroup_proc.decode('utf-8'))
-    except PermissionError:
-        log.error('Permission denied reading file %s', ORATAB_LOCATION)
+    except (IOError, OSError) as err:
+        print_error_message(err, cgroup_proc_list_file)
         raise
-    except FileNotFoundError:
-        log.error('File not found %s', ORATAB_LOCATION)
+    except Exception as err:
+        log.error('Unexpected error: %s', repr(err))
         raise
 
 
@@ -234,11 +247,11 @@ def get_cgroup_name(cgroup_file):
                 if line.startswith('1:name'):
                     cgroup_name = line.split(':')[2].strip()
         return cgroup_name
-    except PermissionError:
-        log.error('Permission denied reading file %s', ORATAB_LOCATION)
+    except (IOError, OSError) as err:
+        print_error_message(err, cgroup_file)
         raise
-    except FileNotFoundError:
-        log.error('File not found %s', ORATAB_LOCATION)
+    except Exception as err:
+        log.error('Unexpected error: %s', repr(err))
         raise
 
 
@@ -254,11 +267,11 @@ def get_cgroup_procs(cgroup_proc_list_file):
                 cgroup_proc = line[:-1]
                 cgroup_proc_list.append(cgroup_proc)
         return cgroup_proc_list
-    except PermissionError:
-        log.error('Permission denied reading file %s', ORATAB_LOCATION)
+    except (IOError, OSError) as err:
+        print_error_message(err, cgroup_proc_list_file)
         raise
-    except FileNotFoundError:
-        log.error('File not found %s', ORATAB_LOCATION)
+    except Exception as err:
+        log.error('Unexpected error: %s', repr(err))
         raise
 
 
@@ -324,11 +337,11 @@ def parseoratab():
             # now assign the local dict and list to the global, MultiProcess-aware Manager-vars
             oracle_ns.oratab = oratab
             oracle_ns.oracle_home_list = oracle_home_list
-    except PermissionError:
-        log.error('Permission denied reading file %s', ORATAB_LOCATION)
+    except (IOError, OSError) as err:
+        print_error_message(err, ORATAB_LOCATION)
         raise
-    except FileNotFoundError:
-        log.error('File not found %s', ORATAB_LOCATION)
+    except Exception as err:
+        log.error('Unexpected error: %s', repr(err))
         raise
 
 
@@ -378,8 +391,9 @@ def run_sqlplus(query, oratab_sid, oratab_item):
             for line in stdout_lines:
                 log.debug('SQLPLUS> %s', repr(line))
 
-    except OSError as ose:
-        log.warning('Running sqlplus went wrong: %s', repr(ose))
+    except (IOError, OSError) as err:
+        log.warning('Running sqlplus went wrong: %s')
+        print_error_message(err, '{}/bin/sqlplus'.format(oracle_home))
     except ValueError as vale:
         log.warning('Invalid argument given: %s', repr(vale))
 
@@ -423,8 +437,9 @@ def lsnrctl(command, tnslsnr_oracle_home, tnslsnr_name):
             for line in stdout_lines:
                 log.debug('LSNRCTL> %s', repr(line))
 
-    except OSError as ose:
-        log.warning('Running lsnrctl went wrong: %s', repr(ose))
+    except (IOError, OSError) as err:
+        log.warning('Running lsnrctl went wrong: %s')
+        print_error_message(err, '{}/bin/lsnrctl'.format(tnslsnr_oracle_home))
     except ValueError as vale:
         log.warning('Invalid argument given: %s', repr(vale))
 
@@ -505,8 +520,8 @@ def main():
     if oracle_ns.tnslsnr_oracle_home is not None:
         pass
     else:
-        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT),
-                                'Cannot find lsnrctl in %s', oracle_ns.tnslsnr_oracle_home)
+        raise IOError(ENOENT, os.strerror(ENOENT),
+                      'Cannot find lsnrctl in %s', oracle_ns.tnslsnr_oracle_home)
 
     # First, parse /etc/oratab
     parseoratab()
