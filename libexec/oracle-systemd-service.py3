@@ -45,10 +45,10 @@ log.addHandler(journal.JournalHandler(SYSLOG_IDENTIFIER=os.path.basename(__file_
 log.setLevel(logging.DEBUG)
 
 # Drop privileges during database cycle to following user
-service_user = os.environ.get('ORACLE_DATABASE_USER', 'oracle')
+SERVICE_USER = os.environ.get('ORACLE_DATABASE_USER', 'oracle')
 
 # Interval for the cgroup-check-process
-cgroup_check_interval = int(os.environ.get('CGROUP_CHECK_INTERVAL', 120))
+CGROUP_CHECK_INTERVAL = int(os.environ.get('CGROUP_CHECK_INTERVAL', 120))
 
 # determine ORACLE_HOME of listener
 oracle_ns.tnslsnr_oracle_home = os.environ['LISTENER_ORACLE_HOME']
@@ -179,7 +179,7 @@ def cgroups_checks():
             sync_pid_cgroups(cgroup_proc_list_file, cgroup_diff_list)
 
         # sleep for a defined amount of time
-        time.sleep(cgroup_check_interval)
+        time.sleep(CGROUP_CHECK_INTERVAL)
 
     log.info('cgroups_checks stopped')
 
@@ -353,8 +353,8 @@ def run_sqlplus(query, oratab_sid, oratab_item):
         sqlplus_env['ORACLE_BASE'] = subprocess.check_output(
             '{}/bin/orabase'.format(oracle_home), env=sqlplus_env).decode('utf-8')
     except subprocess.CalledProcessError as cpe:
-        log.warning('Cannot determin ORACLE_BASE by using %s/bin/orabase', oracle_home)
-        log.debug('Error: %s', repr(cpe))
+        log.warning('Cannot determin ORACLE_BASE by using %s', cpe.cmd)
+        log.debug('Error: %s', repr(cpe.output))
 
     try:
         # Print some debug-output
@@ -372,16 +372,15 @@ def run_sqlplus(query, oratab_sid, oratab_item):
 
             # interact with the running sqlplus and push the query
             (stdout, dummy_stderr) = sqlplus.communicate(query.encode('utf-8'))
-            stdout_lines = stdout.decode('utf-8').split('\n')
+            stdout_lines = stdout.decode('utf-8').splitlines()
 
             # Spit out the response of sqlplus
             for line in stdout_lines:
                 log.debug('SQLPLUS> %s', repr(line))
 
-    except OSError as ose:
-        log.warning('Running sqlplus went wrong: %s', repr(ose))
-    except ValueError as vale:
-        log.warning('Invalid argument given: %s', repr(vale))
+    except subprocess.CalledProcessError as cpe:
+        log.warning('Cannot determin ORACLE_BASE by using %s', cpe.cmd)
+        log.debug('Error: %s', repr(cpe.output))
 
 
 def lsnrctl(command, tnslsnr_oracle_home, tnslsnr_name):
@@ -410,29 +409,22 @@ def lsnrctl(command, tnslsnr_oracle_home, tnslsnr_name):
         log.debug('ORACLE_BASE: %s', tnslsnr_env['ORACLE_HOME'])
 
         # Try and start the listener
-        with subprocess.Popen(['lsnrctl', command, tnslsnr_name],
-                              env=tnslsnr_env,
-                              stdin=subprocess.PIPE,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE) as proc:
+        lsnrctl_output = subprocess.check_output(['lsnrctl', command, tnslsnr_name],
+                                                 env=tnslsnr_env,
+                                                 stderr=subprocess.STDOUT).decode('utf-8').splitlines()
 
-            # Interact with the command
-            (stdout, dummy_stderr) = proc.communicate()
-            # Spit out the response of lsnrctl
-            stdout_lines = stdout.decode('utf-8').split('\n')
-            for line in stdout_lines:
-                log.debug('LSNRCTL> %s', repr(line))
-
-    except OSError as ose:
-        log.warning('Running lsnrctl went wrong: %s', repr(ose))
-    except ValueError as vale:
-        log.warning('Invalid argument given: %s', repr(vale))
+        # Spit out the response of lsnrctl
+        for line in lsnrctl_output:
+            log.debug('LSNRCTL> %s', repr(line))
+    except subprocess.CalledProcessError as cpe:
+        log.warning('Running command went wrong: %s', cpe.cmd)
+        log.debug('Error: %s', cpe.output)
 
 
 def start_db(oratab_sid, oratab_item):
     '''Start the correct database in the correct mode by running a SQL-command'''
     # Try to set the correct user
-    setugid(service_user)
+    setugid(SERVICE_USER)
 
     # get the start-mode of the database, normal or standby (mount)
     oracle_flag = oratab_item['oracle_flag']
@@ -459,7 +451,7 @@ exit
 def stop_db(oratab_sid, oratab_item):
     '''Stop the correct database by running a SQL-command'''
     # Try to set the correct user
-    setugid(service_user)
+    setugid(SERVICE_USER)
 
     # get the start-mode of the database, normal or standby (mount)
     oracle_flag = oratab_item['oracle_flag']
@@ -482,7 +474,7 @@ def lsnrctl_start(tns_orahome, tns_name):
     '''Stop the Listener by running lsnrctl with the supplied argument as the correct user'''
 
     # Try to set the correct user
-    setugid(service_user)
+    setugid(SERVICE_USER)
 
     lsnrctl('start', tns_orahome, tns_name)
 
@@ -490,7 +482,7 @@ def lsnrctl_start(tns_orahome, tns_name):
 def lsnrctl_stop(tns_orahome, tns_name):
     '''Start the Listener by running lsnrctl with the supplied argument as the correct user'''
     # Try to set the correct user
-    setugid(service_user)
+    setugid(SERVICE_USER)
 
     lsnrctl('stop', tns_orahome, tns_name)
 
@@ -522,7 +514,7 @@ def main():
 
     # Run in a loop with set interval until stopped by some SIGNALS
     while oracle_ns.running:
-        time.sleep(cgroup_check_interval)
+        time.sleep(CGROUP_CHECK_INTERVAL)
 
     # If we are stopped, regain control of the only running subprocess and stop it
     cgchecks.terminate()
