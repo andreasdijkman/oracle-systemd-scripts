@@ -1,5 +1,5 @@
 # Systemd-service to start and stop Oracle-databases
-Under OracleLinux 7 (or any other RHEL-clone, like CentOS) you can use systemd to start and stop the database during boot and shutdown of the system. When you start Oracle-databases with dbstart-script supplied by Oracle (`$ORACLE_HOME/bin/dbstart`), the databases are started inside a cgroup, which is tracked by systemd. Now systemd knows your Oracle-service has processes and it needs to stop the processes by running the stop-script. It also tracks the filesystem-usage of the database because the processes have files open on them. This process and filesystem tracking prevents early dismounts of filesystems during shutdown of the system.
+Under OracleLinux 7 and newer (or any other RHEL-clone, like CentOS) you can use systemd to start and stop the database during boot and shutdown of the system. When you start Oracle-databases with dbstart-script supplied by Oracle (`$ORACLE_HOME/bin/dbstart`), the databases are started inside a cgroup, which is tracked by systemd. Now systemd knows your Oracle-service has processes and it needs to stop the processes by running the stop-script. It also tracks the filesystem-usage of the database because the processes have files open on them. This process and filesystem tracking prevents early dismounts of filesystems during shutdown of the system.
 
 If you restart you database outside of the systemd-service, because one of your database needs some parameter-change or you applied a patch, systemd has lost track of the database. Systemd is not aware at this moment that your database is running again (or still running for that matter) so systemd just unmounts the filesystems during shutdown of the system. During shutdown of the system, the Oracle-databases is doing a shutdown abort because all filesystems are gone and the dbstop just fails. Because systemd doesn't know the filesystem is still in use, it parallel stops services, which include filesystem-mounts that aren't in use by running services. This includes the filesystems that your databases are running on.
 
@@ -14,10 +14,7 @@ Part of the solution is the network-reachable target and service. When restartin
 ## Testing
 I've tried to incorporate as much debugging and error-catching as possible but I can't catch everything. If you encounter some problems, please share it here, it always helps. Also if you see room for improvement, please share your thoughts.
 
-I tested this on Oracle Linux 7.6+ with Oracle 12.2 and newer.
-
-## Known issues ##
-A known issue is the parsing of `/etc/oratab`. This happens once at startup of the service (and usually the system) and read into memory. Changes during the running of the services aren't read into memory. So if you add a database to `/etc/oratab`, this database isn't automatically stopped at shutdown or reboot of the system. Also changes in entries aren't reflected, for example changing the startup flag from N to Y for a database. This is work in progress.
+I tested this on Oracle Linux 7.6+ with Oracle 12.2+ and on Oracle Linux 8.3+ with Oracle 19.
 
 ## Contributing ##
 Please feel free to alter, enhance or debug the script, but please share your changes.
