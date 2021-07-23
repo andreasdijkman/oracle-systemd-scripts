@@ -7,8 +7,8 @@ On Oracle Linux 7 you need to install `systemd-python`.
 On Oracle Linuy 8 you need to install `python3-systemd`.
 
 * Place the files inside the folder `libexec` in `/usr/libexec` and mark them executable. Don't forget the SELinux-context!
-  * For Oracle Linux 7, you need the file python2-version of this script (ending in .py2) and rename it to oracle-systemd-service
-  * For Oracle Linux 8, you need the file python3-version of this script (ending in .py3) and rename it to oracle-systemd-service
+  * For Oracle Linux 7, you need the file python2-version of this script (ending in [.py2](libexec/oracle-systemd-service.py3)) and rename it to oracle-systemd-service
+  * For Oracle Linux 8, you need the file python3-version of this script (ending in [.py3](libexec/oracle-systemd-service.py3)) and rename it to oracle-systemd-service
 * Place the files inside the folder `sysconfig` in `/etc/sysconfig` and check the content:
   * network-reachable:
     * `TEST_HOST`: host that get's pinged during boot (default: www.google.com)
