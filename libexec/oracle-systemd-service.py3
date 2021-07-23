@@ -41,8 +41,8 @@ ORATAB_LOCATION = '/etc/oratab'
 # Setup logging
 log = logging.getLogger(__name__)
 log.addHandler(journal.JournalHandler(SYSLOG_IDENTIFIER=os.path.basename(__file__)))
-# log.setLevel(logging.INFO)
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
+#log.setLevel(logging.DEBUG)
 
 # Drop privileges during database cycle to following user
 SERVICE_USER = os.environ.get('ORACLE_DATABASE_USER', 'oracle')
@@ -51,7 +51,12 @@ SERVICE_USER = os.environ.get('ORACLE_DATABASE_USER', 'oracle')
 CGROUP_CHECK_INTERVAL = int(os.environ.get('CGROUP_CHECK_INTERVAL', 120))
 
 # determine ORACLE_HOME of listener
-oracle_ns.tnslsnr_oracle_home = os.environ['LISTENER_ORACLE_HOME']
+if os.environ.get('LISTENER_ORACLE_HOME','undefined') is 'undefined':
+    log.error('LISTENER_ORACLE_HOME not set, cannot start listener')
+    notify('ERRNO=1')
+    exit(1)
+else:
+    oracle_ns.tnslsnr_oracle_home = os.environ['LISTENER_ORACLE_HOME']
 
 
 # Define functions
