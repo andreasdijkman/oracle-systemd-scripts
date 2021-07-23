@@ -14,10 +14,7 @@ Part of the solution is the network-reachable target and service. When restartin
 ## Testing
 I've tried to incorporate as much debugging and error-catching as possible but I can't catch everything. If you encounter some problems, please share it here, it always helps. Also if you see room for improvement, please share your thoughts.
 
-I tested this on Oracle Linux 7.6+ with Oracle 12.2 and newer.
-
-## Known issues ##
-A known issue is the parsing of `/etc/oratab`. This happens once at startup of the service (and usually the system) and read into memory. Changes during the running of the services aren't read into memory. So if you add a database to `/etc/oratab`, this database isn't automatically stopped at shutdown or reboot of the system. Also changes in entries aren't reflected, for example changing the startup flag from N to Y for a database. This is work in progress.
+I tested this on Oracle Linux 7.6+ with Oracle 12.2+ and on Oracle Linux 8.3+ with Oracle 19.
 
 ## Contributing ##
 Please feel free to alter, enhance or debug the script, but please share your changes.
