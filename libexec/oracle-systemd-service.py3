@@ -216,7 +216,7 @@ def sync_pid_cgroups(cgroup_proc_list_file, cgroup_diff_list):
         # add all those pids to the cgroup by adding them one by one to the cgroups-proc-file
         with open(cgroup_proc_list_file, 'a') as cgroup_proc_fh:
             for non_cgroup_proc in cgroup_diff_list:
-                cgroup_proc_fh.write(non_cgroup_proc.decode('utf-8'))
+                cgroup_proc_fh.write(non_cgroup_proc.encode('utf-8'))
     except PermissionError:
         log.error('Permission denied reading file %s', ORATAB_LOCATION)
         raise
