@@ -462,7 +462,9 @@ exit
         startup_mode = 'startup'
         if oracle_flag == 'S':
             # if it is a standby-database, add mount to the startup-mode
-            startup_mode.join(' mount')
+            startup_mode = startup_mode + ' mount'
+        log.debug('Startup-flag of %s: %s', oratab_sid, oracle_flag)
+        log.debug('Startup-mode of %s: %s', oratab_sid, startup_mode)
         run_sqlplus(startup_sql.format(startup_mode), oratab_sid, oratab_item)
     else:
         log.info('Skipping database %s', oratab_sid)
