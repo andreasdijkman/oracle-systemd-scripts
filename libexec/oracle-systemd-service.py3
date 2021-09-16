@@ -96,7 +96,7 @@ def start_oracle_services():
 
 
 def stop_oracle_services():
-    '''Method for starting all Oracle-services'''
+    '''Method for stopping all Oracle-services'''
     log.info('Stopping all databases...')
     notify('STATUS=Stopping all databases...')
 
@@ -221,12 +221,12 @@ def sync_pid_cgroups(cgroup_proc_list_file, cgroup_diff_list):
     '''Let's sync the pids to the cgroup'''
     try:
         # add all those pids to the cgroup by adding them one by one to the cgroups-proc-file
-        with open(cgroup_proc_list_file, mode='a', encoding='utf-8') as cgroup_proc_fh:
-            for non_cgroup_proc in cgroup_diff_list:
-                cgroup_proc_fh.write(non_cgroup_proc.encode('utf-8'))
+        for non_cgroup_proc in cgroup_diff_list:
+            with open(cgroup_proc_list_file, mode='a', encoding='utf-8') as cgroup_proc_fh:
+                log.debug('Adding proc to cgroup: %s', non_cgroup_proc)
+                cgroup_proc_fh.write(non_cgroup_proc)
     except PermissionError:
         log.error('Permission denied reading file %s', ORATAB_LOCATION)
-        raise
     except FileNotFoundError:
         log.error('File not found %s', ORATAB_LOCATION)
         raise
