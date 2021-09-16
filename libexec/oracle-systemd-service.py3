@@ -18,6 +18,7 @@ import time
 import signal
 import subprocess
 import os
+import sys
 import logging
 import multiprocessing
 from errno import ENOENT
@@ -31,7 +32,7 @@ manager = multiprocessing.Manager()
 oracle_ns = manager.Namespace()
 
 # Create some multi-process-aware variables
-oracle_ns.oratab = dict()
+oracle_ns.oratab = {}
 oracle_ns.oracle_home_list = []
 oracle_ns.running = True
 oracle_ns.tnslsnr_oracle_home = None
@@ -51,10 +52,10 @@ SERVICE_USER = os.environ.get('ORACLE_DATABASE_USER', 'oracle')
 CGROUP_CHECK_INTERVAL = int(os.environ.get('CGROUP_CHECK_INTERVAL', 120))
 
 # determine ORACLE_HOME of listener
-if os.environ.get('LISTENER_ORACLE_HOME','undefined') is 'undefined':
+if os.environ.get('LISTENER_ORACLE_HOME', None) is None:
     log.error('LISTENER_ORACLE_HOME not set, cannot start listener')
     notify('ERRNO=1')
-    exit(1)
+    sys.exit(1)
 else:
     oracle_ns.tnslsnr_oracle_home = os.environ['LISTENER_ORACLE_HOME']
 
@@ -78,8 +79,11 @@ def start_oracle_services():
 
     # Spawn database-starters for all databases sequentially
     for oratab_sid, oratab_item in oracle_ns.oratab.items():
-        log.info('Processing database %s...', oratab_sid)
-        notify('STATUS=Starting databases {}'.format(oratab_sid))
+        db_type = 'database'
+        if 'S' in oratab_item['oracle_flag']:
+            db_type = 'standby database'
+        log.info('Processing %s %s...', db_type, oratab_sid)
+        notify('STATUS=Starting {} {}'.format(db_type, oratab_sid))
         startproc = multiprocessing.Process(target=start_db,
                                             args=(oratab_sid, oratab_item),
                                             name='start-proc-{}'.format(oratab_sid))
@@ -99,7 +103,10 @@ def stop_oracle_services():
     stop_list = []
     # Spawn stop-database-processes for all databases at once
     for oratab_sid, oratab_item in oracle_ns.oratab.items():
-        log.info('Processing database %s...', oratab_sid)
+        db_type = 'database'
+        if 'S' in oratab_item['oracle_flag']:
+            db_type = 'standby database'
+        log.info('Processing %s %s...', db_type, oratab_sid)
         stopproc = multiprocessing.Process(target=stop_db,
                                            args=(oratab_sid, oratab_item),
                                            name='stop-proc-{}'.format(oratab_sid))
@@ -305,7 +312,7 @@ def parseoratab():
     try:
         with open(ORATAB_LOCATION, mode='r', encoding='utf-8') as oratab_fh:
             # declare vars
-            oratab = dict()
+            oratab = {}
             oracle_home_list = []
             # loop through every line
             for line in oratab_fh.readlines():
@@ -411,7 +418,7 @@ def lsnrctl(command, tnslsnr_oracle_home, tnslsnr_name):
         # Print some debug-output
         if tnslsnr_env.get('ORACLE_BASE') is not None:
             log.debug('ORACLE_BASE: %s', tnslsnr_env['ORACLE_BASE'])
-        log.debug('ORACLE_BASE: %s', tnslsnr_env['ORACLE_HOME'])
+        log.debug('ORACLE_HOME: %s', tnslsnr_env['ORACLE_HOME'])
 
         # Try and start the listener
         lsnrctl_output = subprocess.check_output(['lsnrctl', command, tnslsnr_name],
