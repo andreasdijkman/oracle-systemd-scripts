@@ -214,7 +214,7 @@ def sync_pid_cgroups(cgroup_proc_list_file, cgroup_diff_list):
     '''Let's sync the pids to the cgroup'''
     try:
         # add all those pids to the cgroup by adding them one by one to the cgroups-proc-file
-        with open(cgroup_proc_list_file, 'a') as cgroup_proc_fh:
+        with open(cgroup_proc_list_file, mode='a', encoding='utf-8') as cgroup_proc_fh:
             for non_cgroup_proc in cgroup_diff_list:
                 cgroup_proc_fh.write(non_cgroup_proc.encode('utf-8'))
     except PermissionError:
@@ -232,7 +232,7 @@ def get_cgroup_name(cgroup_file):
 
     try:
         cgroup_name = None
-        with open(cgroup_file) as proc_fh:
+        with open(cgroup_file, mode='r', encoding='utf-8') as proc_fh:
             for line in proc_fh.readlines():
                 # Kernel 4.14 format
                 # 1:name=systemd:/system.slice/oracle.service
@@ -253,7 +253,7 @@ def get_cgroup_procs(cgroup_proc_list_file):
     Returns a list of processes in the cgroup'''
     try:
         cgroup_proc_list = []
-        with open(cgroup_proc_list_file) as proc_fh:
+        with open(cgroup_proc_list_file, mode='r', encoding='utf-8') as proc_fh:
             for line in proc_fh.readlines():
                 # remove linebreak which is the last character of the string
                 cgroup_proc = line[:-1]
@@ -303,7 +303,7 @@ def parseoratab():
     log.info('Parsing oratab: %s', ORATAB_LOCATION)
 
     try:
-        with open(ORATAB_LOCATION) as oratab_fh:
+        with open(ORATAB_LOCATION, mode='r', encoding='utf-8') as oratab_fh:
             # declare vars
             oratab = dict()
             oracle_home_list = []
