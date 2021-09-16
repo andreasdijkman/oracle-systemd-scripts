@@ -36,7 +36,7 @@ oracle_ns.oracle_home_list = []
 oracle_ns.running = True
 oracle_ns.tnslsnr_oracle_home = None
 
-ORATAB_LOCATION = '/etc/oratab'
+ORATAB_LOCATION = r'/etc/oratab'
 
 # Setup logging
 log = logging.getLogger(__name__)
@@ -130,14 +130,14 @@ def cgroups_checks():
     '''
     log.info('Running cgroups_checks...')
     # declare some variables
-    cgroup_file = '/proc/{}/cgroup'.format(os.getpid())
+    cgroup_file = r'/proc/{}/cgroup'.format(os.getpid())
     cgroup_name = get_cgroup_name(cgroup_file)
 
     log.debug('cgroups_checks running in cgroup %s', cgroup_name)
 
     while oracle_ns.running:
         # Declare some variables
-        cgroup_proc_list_file = '/sys/fs/cgroup/systemd{}/cgroup.procs'.format(cgroup_name)
+        cgroup_proc_list_file = r'/sys/fs/cgroup/systemd{}/cgroup.procs'.format(cgroup_name)
         oracle_home_procs = []
         tnslsnr_proc = []
         cgroup_diff_list = []
