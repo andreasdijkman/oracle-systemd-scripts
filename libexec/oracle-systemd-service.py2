@@ -53,14 +53,6 @@ SERVICE_USER = os.environ.get('ORACLE_DATABASE_USER', 'oracle')
 # Interval for the cgroup-check-process
 CGROUP_CHECK_INTERVAL = int(os.environ.get('CGROUP_CHECK_INTERVAL', 120))
 
-# determine ORACLE_HOME of listener
-if os.environ.get('LISTENER_ORACLE_HOME', None) is None:
-    log.error('LISTENER_ORACLE_HOME not set, cannot start listener')
-    notify('ERRNO=1')
-    sys.exit(1)
-else:
-    oracle_ns.tnslsnr_oracle_home = os.environ['LISTENER_ORACLE_HOME']
-
 
 # Define functions
 
@@ -358,6 +350,20 @@ def parseoratab():
         raise
 
 
+def parse_listener():
+    # determine ORACLE_HOME of listener
+    if os.environ.get('LISTENER_ORACLE_HOME', None) is None:
+        log.error('LISTENER_ORACLE_HOME not set, cannot start listener')
+        notify('ERRNO=1')
+        sys.exit(1)
+    elif not os.path.isfile(os.path.join(os.environ['LISTENER_ORACLE_HOME'], 'bin', 'tnslsnr')):
+        log.error('LISTENER_ORACLE_HOME misconfigured, cannot start listener')
+        notify('ERRNO=1')
+        sys.exit(1)
+    else:
+        oracle_ns.tnslsnr_oracle_home = os.environ['LISTENER_ORACLE_HOME']
+
+
 def run_sqlplus(query, oratab_sid, oratab_item):
     '''Function to run sqlplus
     Arguments are:
@@ -524,14 +530,10 @@ def main():
     signal.signal(signal.SIGUSR2, handler_stop_oracle)
     signal.signal(signal.SIGHUP, handler_reloadoratab)
 
-    if oracle_ns.tnslsnr_oracle_home is not None:
-        pass
-    else:
-        raise IOError(ENOENT, os.strerror(ENOENT),
-                      'Cannot find lsnrctl in %s', oracle_ns.tnslsnr_oracle_home)
-
     # First, parse /etc/oratab
     parseoratab()
+    # Parse and validate listener location
+    parse_listener()
     # Then, start the databases found in oratab in the correct ORACLE_HOME
     start_oracle_services()
 
