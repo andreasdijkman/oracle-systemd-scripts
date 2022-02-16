@@ -36,6 +36,7 @@ oracle_ns.oratab = {}
 oracle_ns.oracle_home_list = []
 oracle_ns.running = True
 oracle_ns.tnslsnr_oracle_home = None
+oracle_ns.listener_name = 'LISTENER'
 
 ORATAB_LOCATION = r'/etc/oratab'
 
@@ -60,9 +61,8 @@ def start_oracle_services():
     log.info('Starting Oracle Services')
 
     log.info('Starting Listener...')
-    listener_name = 'LISTENER'
     startlsnrproc = multiprocessing.Process(target=lsnrctl_start,
-                                            args=(oracle_ns.tnslsnr_oracle_home, listener_name),
+                                            args=(oracle_ns.tnslsnr_oracle_home, oracle_ns.listener_name),
                                             name='start-listener')
     startlsnrproc.start()
     startlsnrproc.join()
@@ -113,9 +113,8 @@ def stop_oracle_services():
     notify('STATUS=Stopped all databases')
 
     log.info('Stopping Listener')
-    listener_name = 'LISTENER'
     stoplsnrproc = multiprocessing.Process(target=lsnrctl_stop,
-                                           args=(oracle_ns.tnslsnr_oracle_home, listener_name),
+                                           args=(oracle_ns.tnslsnr_oracle_home, oracle_ns.listener_name),
                                            name='stop-listener')
     stoplsnrproc.start()
     stoplsnrproc.join()
@@ -337,7 +336,49 @@ def parseoratab():
 
 
 def parse_listener():
-    # determine ORACLE_HOME of listener
+    if 'LISTENER_NAME' in os.environ:
+        try:
+            from dotora.parser import OraParameter, DotOraFile
+        except:
+            log.warn("Failed to import dotora.parse")
+        else:
+            # iterate over all ORACLE_HOMEs, try to find listener config in newest one
+            for oracle_home in sorted(oracle_ns.oracle_home_list, reverse=True):
+                try:
+                    try:
+                        # In case when OH is read-only, listener.ora is placed elsewhere `orabasehome`/network/admin
+                        sqlplus_env = os.environ.copy()
+                        sqlplus_env['PATH'] = sqlplus_env['PATH'] + ':{}/bin'.format(oracle_home)
+                        sqlplus_env['ORACLE_HOME'] = oracle_home
+                        orabasehome = subprocess.check_output('{}/bin/orabasehome'.format(oracle_home), env=sqlplus_env).decode('utf-8').strip()
+                    except subprocess.CalledProcessError as cpe:
+                        log.warning('Cannot determin oraclehome by using %s', cpe.cmd)
+                        log.debug('Error: %s', cpe.output)
+                        orabasehome = oraclehome
+                    # Parse each listener.ora, try to find listener config name os.environ['LISTENER_NAME']
+                    listener_ora = os.path.join(orabasehome, 'network', 'admin', 'listener.ora')
+                    log.debug("Scanning OH: %s" % listener_ora)
+                    orafile = DotOraFile(listener_ora)
+                    for p in orafile.params:
+                        try:
+                            x = orafile.getaliasatribute(p.name, 'DESCRIPTION_LIST/DESCRIPTION')
+                            if p.name == os.environ['LISTENER_NAME']:
+                                log.info('Listener config found: %s in OH: %s' % (p.name, listener_ora))
+                                oracle_ns.tnslsnr_oracle_home = oracle_home
+                                oracle_ns.listener_name = p.name
+                                return
+                        except ValueError as e:
+                            log.debug('listener.ora parse error: %s' % e)
+                            pass
+                except BaseException as e:
+                    log.warn("Generic error: %s" % e)
+                    pass
+        log.error('Listener not found: %s' % os.environ['LISTENER_NAME'])
+        notify('ERRNO=1')
+        sys.exit(1)
+
+    # determine ORACLE_HOME of listener from LISTENER_ORACLE_HOME env variable
+    # default listener names is used 'LISTENER'
     if os.environ.get('LISTENER_ORACLE_HOME', None) is None:
         log.error('LISTENER_ORACLE_HOME not set, cannot start listener')
         notify('ERRNO=1')
@@ -348,6 +389,7 @@ def parse_listener():
         sys.exit(1)
     else:
         oracle_ns.tnslsnr_oracle_home = os.environ['LISTENER_ORACLE_HOME']
+    log.info("Listener OH: %s" % oracle_ns.tnslsnr_oracle_home)
 
 
 def run_sqlplus(query, oratab_sid, oratab_item):
