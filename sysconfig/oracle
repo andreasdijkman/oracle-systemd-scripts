@@ -1,5 +1,11 @@
+# The LISTENER_NAME, iterate over sorted list of OHs, try to find a one having this LISTENER_NAME in listener.ora
+# This variable has precedence over LISTENER_ORACLE_HOME=
+#LISTENER_NAME=LISTENER
+
 # The ORACLE_HOME that runs the listener
-LISTENER_ORACLE_HOME=/u01/app/oracle/product/12.2.0/dbhome_1
+# When LISTENER_NAME=@LATEST@, sort all OHs alphabetically, pick last one and start listener name LISTENER from this OH.
+#LISTENER_ORACLE_HOME=/u01/app/oracle/product/12.2.0/dbhome_1
+LISTENER_ORACLE_HOME=@LATEST@
 
 # Database-user under which the databases are started
 #ORACLE_DATABASE_USER=oracle
