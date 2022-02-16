@@ -383,13 +383,22 @@ def parse_listener():
         log.error('LISTENER_ORACLE_HOME not set, cannot start listener')
         notify('ERRNO=1')
         sys.exit(1)
+    elif os.environ['LISTENER_ORACLE_HOME'] == '@LATEST@':
+        for oracle_home in sorted(oracle_ns.oracle_home_list, reverse=True):
+            if os.path.isfile(os.path.join(oracle_home, 'bin', 'tnslsnr')):
+                oracle_ns.tnslsnr_oracle_home = oracle_home
+                log.info("Listener in latest OH: %s" % oracle_ns.tnslsnr_oracle_home)
+                return
+        log.error('LISTENER_ORACLE_HOME misconfigured, cannot start latest listener')
+        notify('ERRNO=1')
+        sys.exit(1)
     elif not os.path.isfile(os.path.join(os.environ['LISTENER_ORACLE_HOME'], 'bin', 'tnslsnr')):
         log.error('LISTENER_ORACLE_HOME misconfigured, cannot start listener')
         notify('ERRNO=1')
         sys.exit(1)
     else:
         oracle_ns.tnslsnr_oracle_home = os.environ['LISTENER_ORACLE_HOME']
-    log.info("Listener OH: %s" % oracle_ns.tnslsnr_oracle_home)
+        log.info("Listener OH: %s" % oracle_ns.tnslsnr_oracle_home)
 
 
 def run_sqlplus(query, oratab_sid, oratab_item):
