@@ -1,25 +1,94 @@
-## Installation
-It's a simple job of copy all files to the right location, give them the right context, exec-mode and content where necessary.
 
-This script depends on one extra systemd-package for python, besides python itself.
+# Installation (Oracle Linux 7 / Python 2)
 
-On Oracle Linux 7 you need to install `systemd-python`.
-On Oracle Linuy 8 you need to install `python3-systemd`.
+This branch (`python2`) supports **Oracle Linux 7 only**, using the
+`systemd-python` package and a Python 2‑based daemon.
 
-* Place the files inside the folder `libexec` in `/usr/libexec` and mark them executable. Don't forget the SELinux-context!
-  * For Oracle Linux 7, you need the file python2-version of this script (ending in [.py2](libexec/oracle-systemd-service.py2)) and rename it to oracle-systemd-service
-  * For Oracle Linux 8, you need the file python3-version of this script (ending in [.py3](libexec/oracle-systemd-service.py3)) and rename it to oracle-systemd-service
-* Place the files inside the folder `sysconfig` in `/etc/sysconfig` and check the content:
-  * network-reachable:
-    * `TEST_HOST`: host that get's pinged during boot (default: www.google.com)
-    * `REPEAT`: number of retries to ping the host (default 30)
-  * oracle:
-    * `LISTENER_ORACLE_HOME`: ORACLE_HOME of the Listener that needs to be started (no default)
-    * `ORACLE_DATABASE_USER`: user under which the databases and listener are started (default oracle)
-    * `CGROUP_CHECK_INTERVAL`: repeat interval in seconds of the cgroup pid list
-* Place the file inside the folder `systemd` in `/etc/systemd/system` and run a `systemctl daemon-reload`
+For Oracle Linux 8 or 9 (Python 3), use the **master** branch instead.
 
-Enable both services and reboot the server.
+---
 
-## Problems
-If any problems arise, please create a pull request or an issue. I created this repo to share my work and make it easier for others to accomplish the same thing. So any improvement are welcome!
+## Requirements
+
+Install dependencies:
+
+```bash
+sudo yum install -y systemd-python python
+```
+
+---
+
+## File placement
+
+### 1. libexec
+
+Place the Python 2 daemon in:
+
+```
+/usr/libexec/oracle-systemd-service
+
+```
+
+> On this branch the file is already named correctly — **no renaming required**.
+
+Ensure proper permissions:
+
+```bash
+sudo chmod 755 /usr/libexec/oracle-systemd-service
+sudo restorecon -v /usr/libexec/oracle-systemd-service
+```
+
+---
+
+### 2. sysconfig configuration
+
+Copy the files from the `sysconfig/` directory into:
+
+```
+/etc/sysconfig/
+```
+
+Then adjust the following values:
+
+* **TEST_HOST** – host to ping during boot (default: `www.google.com`)
+* **REPEAT** – number of ping retries
+* **LISTENER_ORACLE_HOME** – ORACLE_HOME of the listener (required)
+* **ORACLE_DATABASE_USER** – user under which DB + listener start (default `oracle`)
+* **CGROUP_CHECK_INTERVAL** – seconds between cgroup PID refresh scans
+
+---
+
+### 3. systemd unit
+
+Copy the `.service` files from `systemd/` into:
+
+```
+/etc/systemd/system/
+```
+
+Reload systemd:
+
+```bash
+sudo systemctl daemon-reload
+```
+
+Enable services:
+
+```bash
+sudo systemctl enable oracle.service
+sudo systemctl enable network-reachable.service
+```
+
+Reboot to test:
+
+```bash
+sudo reboot
+```
+
+---
+
+## Problems / Support
+
+If you encounter issues, please create an issue or pull request.
+This branch is maintained only for environments still running OL7 + Python 2.
+
