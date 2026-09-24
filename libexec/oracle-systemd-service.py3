@@ -204,7 +204,7 @@ def handler_stop_signals(_signum, _frame):
 
 def handler_stop_oracle(_signum, _frame):
     '''We received a SIGUSR2, so set the running-boolean to False to stop some loops
-    Addionaly stop the Oracle-databases and the Listener
+    Additionally stop the Oracle-databases and the Listener
     '''
     log.info('Received STOP-signal')
     stop_oracle_services()
@@ -226,9 +226,9 @@ def sync_pid_cgroups(cgroup_proc_list_file, cgroup_diff_list):
                 log.debug('Adding proc to cgroup: %s', non_cgroup_proc)
                 cgroup_proc_fh.write(non_cgroup_proc)
     except PermissionError:
-        log.error('Permission denied reading file %s', ORATAB_LOCATION)
+        log.error('Permission denied writing to %s', cgroup_proc_list_file)
     except FileNotFoundError:
-        log.error('File not found %s', ORATAB_LOCATION)
+        log.error('File not found %s', cgroup_proc_list_file)
         raise
 
 
@@ -247,10 +247,10 @@ def get_cgroup_name(cgroup_file):
                     cgroup_name = line.split(':')[2].strip()
         return cgroup_name
     except PermissionError:
-        log.error('Permission denied reading file %s', ORATAB_LOCATION)
+        log.error('Permission denied reading file %s', cgroup_file)
         raise
     except FileNotFoundError:
-        log.error('File not found %s', ORATAB_LOCATION)
+        log.error('File not found %s', cgroup_file)
         raise
 
 
@@ -267,10 +267,10 @@ def get_cgroup_procs(cgroup_proc_list_file):
                 cgroup_proc_list.append(cgroup_proc)
         return cgroup_proc_list
     except PermissionError:
-        log.error('Permission denied reading file %s', ORATAB_LOCATION)
+        log.error('Permission denied reading file %s', cgroup_proc_list_file)
         raise
     except FileNotFoundError:
-        log.error('File not found %s', ORATAB_LOCATION)
+        log.error('File not found %s', cgroup_proc_list_file)
         raise
 
 
@@ -391,7 +391,7 @@ def run_sqlplus(query, oratab_sid, oratab_item):
                 log.debug('SQLPLUS> %s', repr(line))
 
     except subprocess.CalledProcessError as cpe:
-        log.warning('Cannot determin ORACLE_BASE by using %s', cpe.cmd)
+        log.warning('Running command went wrong: %s', cpe.cmd)
         log.debug('Error: %s', repr(cpe.output))
 
 
@@ -485,7 +485,7 @@ exit
 
 
 def lsnrctl_start(tns_orahome, tns_name):
-    '''Stop the Listener by running lsnrctl with the supplied argument as the correct user'''
+    '''Start the Listener by running lsnrctl with the supplied argument as the correct user'''
 
     # Try to set the correct user
     setugid(SERVICE_USER)
@@ -494,7 +494,7 @@ def lsnrctl_start(tns_orahome, tns_name):
 
 
 def lsnrctl_stop(tns_orahome, tns_name):
-    '''Start the Listener by running lsnrctl with the supplied argument as the correct user'''
+    '''Stop the Listener by running lsnrctl with the supplied argument as the correct user'''
     # Try to set the correct user
     setugid(SERVICE_USER)
 
