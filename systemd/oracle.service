@@ -3,6 +3,16 @@
 #   and starts Listener
 [Unit]
 Description=Systemd Python Service for Oracle Database and Listener
+# These are hard dependencies, not just ordering (After=):
+# if any of these targets fails, oracle.service will not be started.
+#   - local-fs.target / remote-fs.target: local and remote (e.g. NFS)
+#     filesystems must be fully mounted before Oracle starts, because
+#     instances are commonly placed on such mounts. (local-fs.target is
+#     also covered by DefaultDependencies=yes; it is listed explicitly
+#     here for clarity.)
+#   - network-online.target: the network must be up before the listener
+#     starts. network-reachable.service is plugged into this target and
+#     delays boot until the network responds.
 After=network-online.target remote-fs.target local-fs.target
 Requires=network-online.target remote-fs.target local-fs.target
 
@@ -13,6 +23,12 @@ SyslogIdentifier=oracle-service
 TimeoutStartSec=5min
 TimeoutStopSec=5min
 LimitNOFILE=16384
+# Raise RLIMIT_MEMLOCK to a very large value so memory locking is
+# never a constraint, regardless of the system/session default:
+# Oracle can lock large amounts of memory (an SGA backed by huge
+# pages counts against this limit), and a too-small value makes
+# large instances fail to allocate memory. 128G means "no practical
+# limit" and does not need per-host tuning.
 LimitMEMLOCK=128G
 ExecStart=/usr/libexec/oracle-systemd-service
 ExecReload=/bin/kill -HUP $MAINPID
