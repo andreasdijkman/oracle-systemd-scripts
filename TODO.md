@@ -50,9 +50,10 @@ markers exist; these are findings from a manual review.
 
 ## Units & docs
 
-- [ ] `INSTALL.md` does not mention the `pidof` dependency
-      (`sysvinit-tools` package) — the daemon fails silently without it.
-- [ ] `Requires=local-fs.target remote-fs.target` in `oracle.service` is
-      largely redundant with `DefaultDependencies` (local-fs) — optional.
-- [ ] `LimitMEMLOCK=128G` is unusual (RHEL default is effectively
-      unlimited) — document the intent or drop it.
+- [x] `INSTALL.md` did not mention the `pidof` dependency
+      (`sysvinit-tools` package) — the daemon failed silently without it.
+- [x] `Requires=local-fs.target remote-fs.target` in `oracle.service` is
+      largely redundant with `DefaultDependencies` (local-fs) — kept and
+      documented with a comment in the unit file instead of dropping it.
+- [x] `LimitMEMLOCK=128G` is unusual (RHEL default is effectively
+      unlimited) — documented the intent with a comment in the unit file.
