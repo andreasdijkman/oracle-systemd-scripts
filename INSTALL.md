@@ -21,6 +21,13 @@ The `network-reachable` service additionally requires `fping`:
 sudo dnf install -y fping
 ```
 
+The daemon uses `pidof` to find running Oracle processes for the cgroup
+sync; it ships in the `sysvinit-tools` package:
+
+```bash
+sudo dnf install -y sysvinit-tools
+```
+
 ---
 
 ## File placement
