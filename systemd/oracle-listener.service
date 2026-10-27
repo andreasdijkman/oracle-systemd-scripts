@@ -1,0 +1,23 @@
+[Unit]
+Description=Oracle Listener
+After=network-online.target remote-fs.target local-fs.target
+Requires=network-online.target remote-fs.target local-fs.target
+
+[Service]
+EnvironmentFile=/etc/sysconfig/oracle
+Environment=ORACLE_SYSTEMD_UNIT=%n
+Type=notify
+NotifyAccess=main
+Delegate=yes
+SyslogIdentifier=oracle-listener
+TimeoutStartSec=5min
+TimeoutStopSec=5min
+LimitNOFILE=16384
+LimitMEMLOCK=128G
+ExecStart=/usr/libexec/oracle-systemd-listener-service
+ExecReload=/bin/kill -HUP $MAINPID
+KillSignal=SIGUSR2
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

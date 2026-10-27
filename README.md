@@ -13,6 +13,47 @@ To avoid this, you can reregister the processes of the Oracle-database with syst
 
 By running a daemon as part of the systemd-service and inside the cgroup, the cgroup remains active so the processes can be added back to it. This daemon starts the database and reregisters the databases with systemd if they are (re)started. It scans the system of running databases registered in `/etc/oratab` and adds the PIDs back to the correct cgroup if they are not already in them. It also remains active after the databases and the listener are stopped so the cgroup remains active and databases can be added back to it.
 
+## Separate listener service
+
+The original combined `oracle.service` starts both the listener and every
+database selected in `/etc/oratab`. This repository also provides
+`oracle-listener.service`, which manages only the Oracle listener:
+
+- starts the configured listener with `lsnrctl`;
+- keeps the listener service cgroup alive and periodically re-attaches a
+  listener that was restarted outside systemd;
+- stops the listener when systemd sends its configured `SIGUSR2` stop signal;
+- re-reads its listener selection when reloaded with `systemctl reload
+  oracle-listener.service`.
+
+Use `oracle-listener.service` when the listener must be managed separately.
+Do **not** enable it together with the combined `oracle.service`: both units
+would try to start, stop, and track the same listener.
+
+### Listener selection (`parse_listener`)
+
+`oracle-listener.service` reads `/etc/sysconfig/oracle`. Its
+`parse_listener()` function first parses `/etc/oratab` to collect Oracle homes,
+then selects a listener by the following rules.
+
+1. **`LISTENER_NAME` is optional.** It is passed directly to `lsnrctl`; it
+   defaults to `LISTENER`. The service does not read or validate
+   `listener.ora`.
+
+2. **`LISTENER_ORACLE_HOME` is required.** Set it to the Oracle home
+   containing `bin/tnslsnr`; the service verifies that binary before startup.
+
+3. **`LISTENER_ORACLE_HOME=@LATEST@` is an alternative to an explicit
+   path.** The service selects the reverse-lexically-last Oracle home found in
+   `/etc/oratab` that contains `bin/tnslsnr`. This is lexical path ordering,
+   not Oracle-version-aware comparison, so use an explicit path when that
+   ordering is not appropriate for the host.
+
+`ORACLE_DATABASE_USER` controls the account used for `lsnrctl` (default:
+`oracle`). The service parent remains root so it can maintain the listener's
+systemd cgroup. `CGROUP_CHECK_INTERVAL` controls the PID refresh interval in
+seconds (default: `120`).
+
 ## Systemd network-reachable.target
 Part of the solution is the network-reachable target and service. When restarting the machine with physical, bonded or teamed interfaces, it can take some time (I've observed up to 15 seconds) that the network is actually up and reachable. This service is part of the network-reachable.target (which is normally empty under OL7) and pings a configured host (www.google.com by default). The network-reachable.target is online when this service successfully can ping the configured host. If you use a NFS or CIFS mount as backup for your Oracle-database (`db_recovery_file_dest`), the database will fail if the NFS or CIFS mount is unavailable. The mount of the NFS-mount will fail if the network is not up, hence the script to check if the network is ***REALLY*** up.
 

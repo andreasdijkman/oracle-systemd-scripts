@@ -1,5 +1,10 @@
-# The ORACLE_HOME that runs the listener
-LISTENER_ORACLE_HOME=/u01/app/oracle/product/12.2.0/dbhome_1
+# Optional listener alias passed to lsnrctl (default: LISTENER).
+#LISTENER_NAME=LISTENER
+
+# ORACLE_HOME that runs the listener. It must contain bin/tnslsnr.
+# Use @LATEST@ to sort /etc/oratab Oracle homes lexically and select the last oracle home containing bin/tnslsnr.
+#LISTENER_ORACLE_HOME=/u01/app/oracle/product/12.2.0/dbhome_1
+LISTENER_ORACLE_HOME=@LATEST@
 
 # Database-user under which the databases are started
 #ORACLE_DATABASE_USER=oracle
